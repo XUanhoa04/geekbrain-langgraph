@@ -18,8 +18,8 @@ telemetry hiện tại—ví dụ đánh giá SLA, điều tra incident, so sán
 | Model tự tính sai khi ghép hai nguồn | Tạo `DERIVED` evidence cho current/baseline/difference/%/direction/verdict | Đã giải quyết cho các phép tính đã định nghĩa |
 | Citation có nhưng không chứng minh claim | Kiểm tra citation in-range, chỉ gửi cited evidence vào grounding guardrail | Giảm mạnh, chưa phải formal proof |
 | Prompt injection trong tài liệu | Scan và quarantine trước publish; evidence luôn là untrusted data | Đã có hai lớp phòng vệ |
-| Arbitrary SQL và SQL injection | SELECT-only, allowlist table, bind parameters, authorizer, query-only, step/row limit | Đã giải quyết tốt cho SQLite analytics |
-| Tài liệu stale/draft/archive lẫn nhau | Metadata governance, runtime expiry filter, explicit draft intent, archive exclusion | Đã giải quyết theo policy hiện tại |
+| Arbitrary SQL và SQL injection | SELECT-only, allowlist table/column/function, bind parameters, authorizer, query-only, step/row/complexity limit | Đã giải quyết tốt cho SQLite analytics |
+| Tài liệu stale/draft/archive lẫn nhau | Status allow-list, parsed expiry, malformed-metadata rejection, explicit draft intent | Đã giải quyết theo policy hiện tại |
 | Câu hỏi nhiều ý bị route một nguồn | Multi-intent deterministic routing và parallel gather | Đã giải quyết cho intent đã biết |
 | Hội thoại mất chủ thể | Memory checkpoint, standalone rewrite và deterministic service anchoring | Đã giải quyết phần lớn benchmark |
 | Lỗi nguồn làm model đoán | Provider error evidence, bounded timeout và scoped abstention | Đã giải quyết theo fail-closed |
@@ -52,10 +52,13 @@ chỉ một phần.
 **Nên làm tiếp:** tách answer thành structured claims, map từng claim tới evidence IDs, chạy NLI hoặc
 automated reasoning per claim và từ chối riêng claim không đạt.
 
-### 2. Router vẫn dựa trên regex và rewrite model
+### 2. Router vẫn là taxonomy hữu hạn
 
-Router hoạt động tốt với domain hiện tại nhưng taxonomy mới hoặc cách diễn đạt lạ có thể bị bỏ sót.
-Service anchoring chỉ hiểu sáu service đã biết.
+Router hiện normalize dấu tiếng Việt, có phrase set EN/VI, tolerance cho typo phổ biến và nhận diện
+service mới theo naming convention. Analytics còn đọc catalog service thực từ database. Tuy vậy đây
+vẫn là classifier deterministic với taxonomy hữu hạn; cách diễn đạt hoặc intent hoàn toàn mới có thể
+bị bỏ sót. Việc không dùng LLM làm router mặc định là chủ ý để giữ latency, cost và hành vi fail-closed,
+không phải bảo đảm coverage tuyệt đối.
 
 **Nên làm tiếp:** schema-based intent classifier có confidence, out-of-distribution detection và
 golden routing set mở rộng bằng paraphrase/adversarial generation.
@@ -100,10 +103,11 @@ score trends, retrieval drift hoặc SLO dashboard của chính agent.
 **Nên làm tiếp:** OpenTelemetry traces không chứa raw content, CloudWatch EMF metrics, cost/latency
 budgets và alarms cho abstention/grounding degradation.
 
-### 8. Chưa kiểm chứng đa ngôn ngữ và tải lớn
+### 8. Chưa kiểm chứng đa ngôn ngữ end-to-end và tải lớn
 
-Agent trả lời theo ngôn ngữ người dùng nhưng benchmark chủ yếu tiếng Anh. Chưa có load, soak,
-concurrency, chaos hoặc regional failover test.
+Router và credential policy đã có targeted Vietnamese/adversarial unit tests, nhưng answer benchmark
+vẫn chủ yếu tiếng Anh. Chưa có Vietnamese retrieval/grounding golden set, load, soak, concurrency,
+chaos hoặc regional failover test.
 
 **Nên làm tiếp:** Vietnamese golden set, Locust/k6 load test, dependency fault injection và Bedrock
 quota/throttling tests.

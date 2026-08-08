@@ -12,10 +12,12 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 
 ## What makes it different
 
-- Multi-intent routing: one question can use `DOCUMENT`, `DATABASE` and `LIVE_METRICS` together.
+- Accent-insensitive EN/VI multi-intent routing with bounded typo tolerance; one question can use
+  `DOCUMENT`, `DATABASE` and `LIVE_METRICS` together.
 - Governed ingestion: owner, version, checksum, approval, review date, expiry and status metadata.
 - Amazon Bedrock Knowledge Base backed by S3 Vectors; no OpenSearch dependency.
-- Read-only analytics with table allowlists, parameter binding, SQLite authorizer, step and row limits.
+- Read-only analytics with table/column/function allowlists, parameter binding, SQLite authorizer,
+  query complexity and result limits.
 - Citation-ready deterministic evidence for SLA, historical-average, capacity, deadline and
   holistic cross-source calculations.
 - Runtime freshness filtering, explicit draft retrieval and archive exclusion.
@@ -33,7 +35,7 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 | L3 grounded computation | 10 / 10 |
 | L4 conversations | 6 / 6 conversations, 24 / 24 turns |
 | L5 holistic investigations | 5 / 5 |
-| Unit and resilience tests | 48 passed |
+| Unit and resilience tests | 81 passed |
 
 Live metrics have intentional jitter. The evaluator accepts a bounded tolerance and allows the
 observed comparison direction to differ from a static fixture when the live value and historical

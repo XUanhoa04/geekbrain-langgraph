@@ -1,5 +1,7 @@
 from geekbrain_rag.agent import (
+    _citation_ids,
     _cited_grounding_context,
+    _has_usable_evidence,
     _valid_citations,
     answer_requirements,
     derive_capacity_evidence,
@@ -70,6 +72,29 @@ def test_current_request_volume_routes_live_metrics():
     assert detect_intents("What is AuthSvc's current request volume?") == ["LIVE_METRICS"]
 
 
+def test_vietnamese_current_system_status_routes_live_metrics():
+    assert detect_intents("Cho tôi xem trạng thái hệ thống hiện tại của AuthSvc") == [
+        "LIVE_METRICS"
+    ]
+
+
+def test_vietnamese_policy_and_current_latency_routes_both_sources():
+    assert detect_intents("Chính sách SLA và độ trễ hiện tại của AuthSvc là gì?") == [
+        "DOCUMENT",
+        "DATABASE",
+        "LIVE_METRICS",
+    ]
+
+
+def test_common_live_typo_and_database_size_do_not_fall_back_to_documents():
+    assert detect_intents("How is the halth of payment gateway?") == ["LIVE_METRICS"]
+    assert detect_intents("What is the db size?") == ["DATABASE"]
+
+
+def test_non_live_status_word_does_not_trigger_fuzzy_live_route():
+    assert detect_intents("What is the status of the deployment proposal?") == ["DOCUMENT"]
+
+
 def test_holistic_database_expansion_is_bounded_and_multifaceted():
     queries = expand_database_queries(
         "Assess whether PaymentGW is reliable and recommend improvements."
@@ -84,6 +109,26 @@ def test_citations_must_exist_and_be_in_range():
     assert _valid_citations("Fact [1]. Another fact [2].", 2)
     assert not _valid_citations("Fact without support.", 2)
     assert not _valid_citations("Made-up source [9].", 2)
+
+
+def test_grouped_and_adjacent_citations_are_supported_but_malformed_groups_fail():
+    assert _citation_ids("Facts [1, 2] and [3][4].") == [1, 2, 3, 4]
+    assert _valid_citations("Facts [1, 2] and [3][4].", 4)
+    assert not _valid_citations("Broken [1, source].", 4)
+
+
+def test_missing_citations_never_expand_grounding_to_all_evidence():
+    evidence = [
+        {"citation_id": 1, "source": "a", "content": "secretly unrelated"},
+        {"citation_id": 2, "source": "b", "content": "also unrelated"},
+    ]
+    assert _cited_grounding_context("Unsupported answer.", evidence) == ""
+
+
+def test_zero_or_error_only_evidence_forces_abstention_path():
+    assert not _has_usable_evidence([])
+    assert not _has_usable_evidence([{"kind": "DOCUMENT_ERROR"}])
+    assert _has_usable_evidence([{"kind": "DATABASE"}, {"kind": "DOCUMENT_ERROR"}])
 
 
 def test_current_api_reference_is_not_live_monitoring():
@@ -239,3 +284,39 @@ def test_growth_answer_is_rendered_from_database_derivation():
     assert answer is not None
     assert "12.5%" in answer
     assert "24000" in answer and "27000" in answer
+
+
+def test_current_latency_answer_always_names_live_provenance():
+    evidence = [
+        {
+            "citation_id": 1,
+            "kind": "LIVE_METRICS",
+            "content": '{"observed_services":{"PaymentGW":{"latency_ms":{"p99":176}}}}',
+        }
+    ]
+    answer = deterministic_computational_answer(
+        "What is PaymentGW's current p99 latency?", evidence
+    )
+    assert answer is not None
+    assert "live Monitoring API" in answer
+    assert "176 ms [1]" in answer
+
+
+def test_live_average_answer_uses_observed_direction_not_static_fixture():
+    evidence = [
+        {
+            "citation_id": 3,
+            "kind": "DERIVED",
+            "source": "Deterministic cross-source comparison",
+            "content": """{"comparisons":[{"service":"PaymentGW",
+            "metric":"latency_p99_ms","current_value":178,
+            "historical_average":183.0016,"difference":-5.0016,
+            "percentage_difference":-2.7331,"observed_direction":"below"}]}""",
+        }
+    ]
+    answer = deterministic_computational_answer(
+        "Compare PaymentGW's current p99 latency to its Q1 2026 daily average.", evidence
+    )
+    assert answer is not None
+    assert "live Monitoring API" in answer and "analytics database" in answer
+    assert "below the historical average [3]" in answer
