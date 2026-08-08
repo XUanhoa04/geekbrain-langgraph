@@ -12,8 +12,8 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 
 ## What makes it different
 
-- Typed semantic multi-intent routing with EN/VI lexical fallback; one question can use
-  `DOCUMENT`, `DATABASE` and `LIVE_METRICS` together.
+- Typed semantic multi-intent routing plus a language-independent task taxonomy; one question can
+  use `DOCUMENT`, `DATABASE` and `LIVE_METRICS` together without keyword-triggered expansion.
 - Runtime service discovery from the analytics database and Monitoring API; adding a service does
   not require changing the agent source.
 - Governed ingestion: owner, version, checksum, approval, review date, expiry and status metadata.
@@ -37,7 +37,7 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 | L3 grounded computation | 10 / 10 |
 | L4 conversations | 6 / 6 conversations, 24 / 24 turns |
 | L5 holistic investigations | 4 / 5 in the latest full AWS run; the remaining broad report safely abstained |
-| Unit and resilience tests | 82 passed |
+| Unit and resilience tests | 85 passed |
 
 Live metrics have intentional jitter. The evaluator accepts a bounded tolerance and allows the
 observed comparison direction to differ from a static fixture when the live value and historical

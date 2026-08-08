@@ -9,6 +9,10 @@ SVG dưới đây được render từ
 
 ## End-to-end request flow — Mermaid
 
+The Bedrock router returns both source intents and typed semantic tasks. Those tasks drive query
+expansion, evidence coverage and answer contracts independently of the user's language; lexical
+matching remains only a conservative source-selection fallback if semantic routing is unavailable.
+
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {
   "fontFamily": "Inter, Segoe UI, sans-serif",

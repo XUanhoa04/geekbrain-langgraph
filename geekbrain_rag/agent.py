@@ -29,6 +29,28 @@ from .operations import log_query
 from .retrieval import Evidence, KnowledgeBaseRetriever
 
 Intent = Literal["DOCUMENT", "DATABASE", "LIVE_METRICS"]
+InvestigationTask = Literal[
+    "LIVE_STATUS",
+    "SHARED_FINDINGS",
+    "ONBOARDING",
+    "DEPENDENCY_IMPACT",
+    "ESCALATION_PATH",
+    "OWNERSHIP",
+    "SLA_ASSESSMENT",
+    "COMPARISON",
+    "PERIOD_CHANGE",
+    "TREND",
+    "DEADLINE_STATUS",
+    "FORECAST",
+    "CAPACITY_RISK",
+    "HOLISTIC_SYNTHESIS",
+    "REPORT_CARD",
+    "COST_OPTIMIZATION",
+    "RELIABILITY",
+    "SLA_RISK",
+    "STAFFING_DECISION",
+    "DRAFT_REVIEW",
+]
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +108,8 @@ VI_HOLISTIC_RE = re.compile(
     r"\b(toan dien|tong the|tat ca dich vu|danh gia do tin cay|dieu tra tong hop|"
     r"dich vu nao rui ro nhat)\b"
 )
+
+
 class RouteDecision(BaseModel):
     """Structured, auditable source selection returned by the semantic router."""
 
@@ -94,11 +118,17 @@ class RouteDecision(BaseModel):
     document_queries: list[str] = Field(default_factory=list, max_length=3)
     database_queries: list[str] = Field(default_factory=list, max_length=5)
     live_query: str = Field(default="", max_length=2_000)
+    tasks: list[InvestigationTask] = Field(default_factory=list, max_length=20)
     answer_dimensions: list[str] = Field(default_factory=list, max_length=20)
 
     @field_validator("intents")
     @classmethod
     def unique_intents(cls, values: list[Intent]) -> list[Intent]:
+        return list(dict.fromkeys(values))
+
+    @field_validator("tasks")
+    @classmethod
+    def unique_tasks(cls, values: list[InvestigationTask]) -> list[InvestigationTask]:
         return list(dict.fromkeys(values))
 
 
@@ -174,7 +204,14 @@ def semantic_route(
             "health plus historical performance and organizational/policy context require all three sources. This "
             "includes reliability assessments, risk prioritization, report cards, cost optimization constrained by "
             "current utilization/SLA, and team reinforcement decisions. Select every necessary source for comparisons or broad "
-            "assessments. Route by semantics in any language, not exact keywords. Also create bounded, self-contained "
+            "assessments. Route by semantics in any language, not exact keywords. "
+            "Classify the requested operations into the typed tasks when applicable: LIVE_STATUS, SHARED_FINDINGS, "
+            "ONBOARDING, DEPENDENCY_IMPACT, ESCALATION_PATH, OWNERSHIP, SLA_ASSESSMENT, COMPARISON, PERIOD_CHANGE, "
+            "TREND, DEADLINE_STATUS, FORECAST, CAPACITY_RISK, HOLISTIC_SYNTHESIS, REPORT_CARD, COST_OPTIMIZATION, "
+            "RELIABILITY, SLA_RISK, STAFFING_DECISION, and DRAFT_REVIEW. Assign tasks by meaning in the user's language; for "
+            "example, employee induction and 'nhân sự mới' are ONBOARDING, while expenses and 'chi phí' are cost. "
+            "The tasks drive downstream retrieval and answer contracts, so include every operation the request needs. "
+            "Also create bounded, self-contained "
             "source queries: up to 3 semantic document queries, up to 5 database questions, and one live query. Each "
             "database question must request one coherent result set and copy every explicit date, quarter and year "
             "from the user's evidence timeframe; never invent a relative time window that the user did not request. "
@@ -352,10 +389,11 @@ def _cited_grounding_context(answer: str, evidence: list[dict]) -> str:
     )
 
 
-def _covers_required_entities(query: str, answer: str, evidence: list[dict]) -> bool:
+def _covers_required_entities(
+    answer: str, evidence: list[dict], tasks: tuple[InvestigationTask, ...] = ()
+) -> bool:
     """Prevent a safety rewrite from silently dropping entities in exhaustive reports."""
-    lowered = query.lower()
-    if "report card" not in lowered and "all services" not in lowered:
+    if "REPORT_CARD" not in tasks:
         return True
     entities = {
         str(item.get("metadata", {}).get("service", "")).strip()
@@ -726,9 +764,18 @@ def derive_capacity_evidence(question: str, items: list[Evidence]) -> list[Evide
     ]
 
 
-def derive_service_profiles(question: str, items: list[Evidence]) -> list[Evidence]:
+def derive_service_profiles(
+    items: list[Evidence], tasks: tuple[InvestigationTask, ...] = ()
+) -> list[Evidence]:
     """Normalize structured multi-source facts by discovered service without rendering answers."""
-    if not HOLISTIC_RE.search(question):
+    if not set(tasks) & {
+        "HOLISTIC_SYNTHESIS",
+        "REPORT_CARD",
+        "COST_OPTIMIZATION",
+        "RELIABILITY",
+        "SLA_RISK",
+        "STAFFING_DECISION",
+    }:
         return []
     profiles: dict[str, dict] = {}
     lineage: set[str] = set()
@@ -813,150 +860,188 @@ def derive_service_profiles(question: str, items: list[Evidence]) -> list[Eviden
     ]
 
 
-def expand_document_queries(question: str, catalog: tuple[str, ...] = ()) -> list[str]:
+def expand_document_queries(
+    question: str,
+    catalog: tuple[str, ...] = (),
+    tasks: tuple[InvestigationTask, ...] = (),
+) -> list[str]:
+    """Expand retrieval from semantic tasks, never from language-specific substrings."""
     queries = [question]
     services = match_services(question, catalog)
-    lowered = question.lower()
-    if "common" in lowered or "shared" in lowered:
+    task_set = set(tasks)
+    subject = services[0] if services else "service"
+    broad_subject = services[0] if len(services) == 1 else "all services"
+    if "SHARED_FINDINGS" in task_set:
         queries.extend(
             f"{service} incident postmortem lessons monitoring follow-up actions"
             for service in services
         )
-    if "capacity" in lowered:
-        subject = services[0] if services else "service"
+    if "CAPACITY_RISK" in task_set:
         queries.append(f"{subject} capacity planning proposed fix scaling recommendation")
-    if "deadline" in lowered or "follow-up" in lowered or "follow up" in lowered:
-        subject = services[0] if services else "service"
+    if "DEADLINE_STATUS" in task_set:
         queries.append(f"{subject} incident postmortem follow-up action deadline scheduled")
-    if any(term in lowered for term in ("affected", "depend", "goes completely down")):
-        subject = services[0] if services else "service"
+    if "DEPENDENCY_IMPACT" in task_set:
         queries.append(
             f"{subject} direct upstream downstream dependencies service architecture impact"
         )
-    if "onboarding" in lowered or "new engineer" in lowered:
-        subject = services[0] if services else "team"
-        queries.append(f"{subject} onboarding checklist access training first week on-call shadow")
-    if HOLISTIC_RE.search(question):
-        subject = services[0] if services else "all services"
-        if "cost" in lowered or "spending" in lowered:
-            queries.extend(
-                [
-                    f"{subject} cost optimization latest spending third-party cost recommendations",
-                    f"{subject} utilization SLA constraints cost reduction capacity",
-                ]
-            )
-        elif "team" in lowered or "engineer" in lowered or "reinforcement" in lowered:
-            queries.extend(
-                [
-                    f"{subject} team size ownership staffing hiring current concerns",
-                    f"{subject} capacity complaints scaling incident staffing recommendations",
-                ]
-            )
-        else:
-            queries.extend(
-                [
-                    f"{subject} incident postmortems degradation root cause follow-up action",
-                    f"{subject} capacity ownership scaling reliability recommendation",
-                ]
-            )
-        if "report card" in lowered or "all services" in lowered:
-            queries.extend(
-                f"{service} incident postmortem incident type root cause reliability"
-                for service in catalog
-            )
+    if "ONBOARDING" in task_set:
+        team = services[0] if services else "team"
+        queries.append(f"{team} onboarding checklist access training first week on-call shadow")
+    if "COST_OPTIMIZATION" in task_set:
+        queries.extend(
+            [
+                f"{broad_subject} cost optimization latest spending third-party recommendations",
+                f"{broad_subject} utilization SLA constraints cost reduction capacity",
+            ]
+        )
+    if "STAFFING_DECISION" in task_set:
+        queries.extend(
+            [
+                f"{broad_subject} team size ownership staffing hiring current concerns",
+                f"{broad_subject} capacity complaints scaling incident staffing recommendations",
+            ]
+        )
+    if task_set & {"HOLISTIC_SYNTHESIS", "RELIABILITY", "SLA_RISK", "REPORT_CARD"}:
+        queries.extend(
+            [
+                f"{broad_subject} incident postmortems degradation root cause follow-up action",
+                f"{broad_subject} capacity ownership scaling reliability recommendation",
+            ]
+        )
+    if "REPORT_CARD" in task_set:
+        queries.extend(
+            f"{service} incident postmortem incident type root cause reliability"
+            for service in catalog
+        )
     return queries[:10]
 
 
-def expand_database_queries(question: str, catalog: tuple[str, ...] = ()) -> list[str]:
-    """Produce bounded read-only analytics questions for holistic investigations."""
-    if not HOLISTIC_RE.search(question):
+def expand_database_queries(
+    question: str,
+    catalog: tuple[str, ...] = (),
+    tasks: tuple[InvestigationTask, ...] = (),
+) -> list[str]:
+    """Produce bounded analytics questions from language-independent semantic tasks."""
+    task_set = set(tasks)
+    analytic_tasks = {
+        "SLA_ASSESSMENT",
+        "COMPARISON",
+        "PERIOD_CHANGE",
+        "TREND",
+        "FORECAST",
+        "CAPACITY_RISK",
+        "HOLISTIC_SYNTHESIS",
+        "REPORT_CARD",
+        "COST_OPTIMIZATION",
+        "RELIABILITY",
+        "SLA_RISK",
+        "STAFFING_DECISION",
+    }
+    if not task_set & analytic_tasks:
         return [question]
-    lowered = question.lower()
     services = match_services(question, catalog)
     scope = services[0] if len(services) == 1 else "all services"
-    queries = [
-        f"{question}\nAnalytics subtask: incident history, severity, root cause/type, and resolution for {scope}",
-        f"{question}\nAnalytics subtask: historical operational metric aggregates for {scope}",
-        f"{question}\nAnalytics subtask: matching SLA targets for {scope}",
-    ]
-    if "cost" in lowered:
-        queries.insert(
-            0,
+    queries: list[str] = []
+    if "COST_OPTIMIZATION" in task_set:
+        queries.append(
             f"{question}\nAnalytics subtask: cost totals and trends for {scope}. Use the latest available "
             "complete three-month quarter; a future optimization deadline is not the evidence period.",
         )
-    if services and len(services) == 1:
-        service = services[0]
-        queries.insert(
-            0,
-            f"{question}\nAnalytics subtask: incident history, severity, root cause/type, and resolution for {service}",
+    if task_set & {
+        "HOLISTIC_SYNTHESIS",
+        "REPORT_CARD",
+        "RELIABILITY",
+        "SLA_RISK",
+        "STAFFING_DECISION",
+    }:
+        queries.append(
+            f"{question}\nAnalytics subtask: incident history, severity, root cause/type, and resolution for {scope}"
         )
-    return queries[:5]
+    if task_set & analytic_tasks:
+        queries.append(
+            f"{question}\nAnalytics subtask: historical operational metric aggregates for {scope}"
+        )
+    if task_set & {
+        "SLA_ASSESSMENT",
+        "HOLISTIC_SYNTHESIS",
+        "REPORT_CARD",
+        "RELIABILITY",
+        "SLA_RISK",
+        "COST_OPTIMIZATION",
+    }:
+        queries.append(f"{question}\nAnalytics subtask: matching SLA targets for {scope}")
+    return list(dict.fromkeys(queries or [question]))[:5]
 
 
-def answer_requirements(question: str, planned_dimensions: list[str] | None = None) -> str:
-    lowered = question.lower()
+def answer_requirements(
+    question: str,
+    planned_dimensions: list[str] | None = None,
+    tasks: tuple[InvestigationTask, ...] = (),
+) -> str:
+    """Build answer contracts from semantic tasks rather than English trigger words."""
+    del question  # The semantic route already interpreted the user's original language.
+    task_set = set(tasks)
     requirements: list[str] = []
-    if LIVE_RE.search(question):
+    if "LIVE_STATUS" in task_set:
         requirements.append(
             "Explicitly identify each observed current value as a live Monitoring API observation."
         )
-    if "common" in lowered or "shared" in lowered:
+    if "SHARED_FINDINGS" in task_set:
         requirements.append(
             "Return only generalized themes supported by evidence for every named entity; each shared theme "
             "must cite evidence from both sides. Do not analogize different mechanisms or list separate "
             "entity-specific lessons as common. Return at most two strongly supported shared themes; one is "
             "better than inventing a weak second theme."
         )
-    if "onboarding" in lowered or "new engineer" in lowered:
+    if "ONBOARDING" in task_set:
         requirements.append(
             "Cover both onboarding actions (access/setup, required training, first-week activities) and the "
             "team's owners, services and technology stack."
         )
-    if any(term in lowered for term in ("affected", "depend", "goes completely down")):
+    if "DEPENDENCY_IMPACT" in task_set:
         requirements.append(
             "Name concrete directly dependent services before broader indirect impact."
         )
-    if "escalation path" in lowered:
+    if "ESCALATION_PATH" in task_set:
         requirements.append(
             "Include every requested role/name and its exact timeframe in sequence."
         )
-    if "team" in lowered and any(term in lowered for term in ("responsible", "owns", "contact")):
+    if "OWNERSHIP" in task_set:
         requirements.append(
             "State both the responsible team and the named team lead when available."
         )
-    if "sla" in lowered and ("current" in lowered or "currently" in lowered):
+    if "SLA_ASSESSMENT" in task_set and "LIVE_STATUS" in task_set:
         requirements.append(
             "State each relevant observed live metric and its matching SLA target numerically before the verdict."
         )
-    if "compare" in lowered:
+    if "COMPARISON" in task_set:
         requirements.append(
             "State both compared numeric values, their time/source distinction, and the observed direction."
         )
-    if "increase" in lowered or "decrease" in lowered:
+    if "PERIOD_CHANGE" in task_set:
         requirements.append(
             "State both period totals, the absolute change, and the percentage change when the evidence supports it."
         )
-    if any(term in lowered for term in ("grow", "growth", "trend")):
+    if "TREND" in task_set:
         requirements.append(
             "State the starting and ending time/value plus absolute and percentage growth when available."
         )
-    if "overdue" in lowered or "past due" in lowered:
+    if "DEADLINE_STATUS" in task_set:
         requirements.append(
             "State the deadline, current UTC date, and deterministic overdue verdict."
         )
-    if re.search(r"(?i)\b(when|how long)\b.*\b(hit|reach)\b", question):
+    if "FORECAST" in task_set:
         requirements.append("State the target and the calculated approximate time to reach it.")
-    if "close" in lowered and any(term in lowered for term in ("capacity", "threshold")):
+    if "CAPACITY_RISK" in task_set:
         requirements.append(
             "Use the deterministic capacity proximity verdict and state the utilization percentage."
         )
-    if HOLISTIC_RE.search(question):
+    if "HOLISTIC_SYNTHESIS" in task_set:
         requirements.append(
             "Synthesize only the dimensions and timeframe requested by the user. Separate observed live state, "
             "historical analytics and governed document findings; recommendations must be directly supported."
         )
-    if "report card" in lowered:
+    if "REPORT_CARD" in task_set:
         requirements.append(
             "Return exactly one compact bullet per entity. Each bullet should combine incident count/worst severity, "
             "historical performance, an explicit live status, matching SLA target comparison, and the incident "
@@ -964,20 +1049,18 @@ def answer_requirements(question: str, planned_dimensions: list[str] | None = No
             "separate metric bullets. Explicitly say when a per-entity document fact or SLA comparison is unavailable. "
             "Keep each bullet under 55 words so every entity fits in the response."
         )
-    if any(term in lowered for term in ("cut", "reduce", "reduction", "optimize")) and (
-        "cost" in lowered or "spending" in lowered
-    ):
+    if "COST_OPTIMIZATION" in task_set:
         requirements.append(
             "State the historical spending period and total, ranked per-entity costs or trends, the requested "
             "numeric savings target, observed live utilization, relevant SLA constraints, and a prioritized "
             "recommendation. Keep every entity label attached to its metrics."
         )
-    if "reliable" in lowered or "reliability" in lowered:
+    if "RELIABILITY" in task_set:
         requirements.append(
             "State an overall reliability verdict, current live-vs-target status, incident count and worst severity, "
             "material cost/capacity trend, root cause, and the status/deadline of concrete remediation when available."
         )
-    if "most at risk" in lowered or "sla breach" in lowered:
+    if "SLA_RISK" in task_set:
         requirements.append(
             "Identify observed breaches numerically, then cover root cause, ownership or staffing/capacity constraints, "
             "and the highest-priority governed remediation."
@@ -1004,18 +1087,33 @@ def build_graph(settings: Settings | None = None):
             dict.fromkeys((*analytics.available_services(), *monitoring.available_services()))
         )
 
-    def retrieve_documents(query: str, planned_queries: list[str] | None = None) -> list[Evidence]:
+    def retrieve_documents(
+        query: str,
+        planned_queries: list[str] | None = None,
+        tasks: tuple[InvestigationTask, ...] = (),
+    ) -> list[Evidence]:
         collected: list[Evidence] = []
-        include_drafts = bool(
-            re.search(r"(?i)\b(draft|planning|planned|propose|proposal|capacity plan)\b", query)
-        )
+        task_set = set(tasks)
+        include_drafts = "DRAFT_REVIEW" in task_set
         catalog = service_catalog()
         queries = list(
             dict.fromkeys(
-                [query, *(planned_queries or []), *expand_document_queries(query, catalog)]
+                [
+                    query,
+                    *(planned_queries or []),
+                    *expand_document_queries(query, catalog, tasks),
+                ]
             )
         )
-        query_limit = 12 if HOLISTIC_RE.search(query) else 4
+        broad_tasks = {
+            "HOLISTIC_SYNTHESIS",
+            "REPORT_CARD",
+            "COST_OPTIMIZATION",
+            "RELIABILITY",
+            "SLA_RISK",
+            "STAFFING_DECISION",
+        }
+        query_limit = 12 if task_set & broad_tasks else 4
         for index, expanded in enumerate(queries[:query_limit]):
             collected.extend(
                 retriever.retrieve(
@@ -1041,20 +1139,17 @@ def build_graph(settings: Settings | None = None):
                     metadata={"reason": "EMPTY_ELIGIBLE_RESULT", "allowed_statuses": allowed},
                 )
             ]
-        if "common" in query.lower() or "shared" in query.lower():
+        if "SHARED_FINDINGS" in task_set:
             services = [service.lower() for service in match_services(query, catalog)]
             focused = [
                 item
                 for item in unique
                 if "postmortem" in item.source.lower()
                 and any(service in item.source.lower() for service in services)
-                and (
-                    "march" not in query.lower() or "march" in (item.source + item.content).lower()
-                )
             ]
             if focused:
                 unique = focused
-        if "report card" in query.lower() or "all services" in query.lower():
+        if "REPORT_CARD" in task_set:
             # Broad reports need entity coverage, not merely the globally highest
             # similarity chunks. Select one best matching document per discovered
             # service, then fill remaining slots by retrieval rank.
@@ -1102,19 +1197,19 @@ def build_graph(settings: Settings | None = None):
         query = state["query"]
         intents = state["intents"]
         route_plan = state.get("route_plan", {})
+        route_tasks = tuple(route_plan.get("tasks", []))
         jobs = {}
         items: list[Evidence] = []
         catalog = service_catalog()
         planned_database = [
             str(item)
             for item in route_plan.get("database_queries", [])
-            if str(item).strip()
-            and _valid_planned_question(str(item), query)
+            if str(item).strip() and _valid_planned_question(str(item), query)
         ]
         database_queries = (
             list(
                 dict.fromkeys(
-                    [*planned_database, *expand_database_queries(query, catalog)]
+                    [*planned_database, *expand_database_queries(query, catalog, route_tasks)]
                 )
             )[:5]
             if "DATABASE" in intents
@@ -1139,7 +1234,9 @@ def build_graph(settings: Settings | None = None):
                     for item in route_plan.get("document_queries", [])
                     if str(item).strip()
                 ]
-                jobs[pool.submit(retrieve_documents, query, planned_documents[:3])] = "DOCUMENT"
+                jobs[pool.submit(retrieve_documents, query, planned_documents[:3], route_tasks)] = (
+                    "DOCUMENT"
+                )
             for database_query in database_queries:
                 jobs[pool.submit(analytics.query, database_query)] = "DATABASE"
             if "LIVE_METRICS" in intents:
@@ -1175,7 +1272,7 @@ def build_graph(settings: Settings | None = None):
         items.extend(derive_cross_source_evidence(query, items))
         items.extend(derive_temporal_evidence(query, items))
         items.extend(derive_capacity_evidence(query, items))
-        items.extend(derive_service_profiles(query, items))
+        items.extend(derive_service_profiles(items, route_tasks))
         serialized, context = _serialize_evidence(items)
         return {"evidence": serialized, "retrieved_context": context}
 
@@ -1184,6 +1281,7 @@ def build_graph(settings: Settings | None = None):
         planned_dimensions = [
             str(item) for item in state.get("route_plan", {}).get("answer_dimensions", [])
         ]
+        route_tasks = tuple(state.get("route_plan", {}).get("tasks", []))
         evidence = state.get("evidence", [])
         context = state.get("retrieved_context") or ""
         if not _has_usable_evidence(evidence):
@@ -1213,7 +1311,7 @@ def build_graph(settings: Settings | None = None):
             user = HumanMessage(
                 content=(
                     f"<question>{query}</question>\n"
-                    f"<answer_requirements>{answer_requirements(query, planned_dimensions)}</answer_requirements>\n\n"
+                    f"<answer_requirements>{answer_requirements(query, planned_dimensions, route_tasks)}</answer_requirements>\n\n"
                     f"<evidence>\n{context}\n</evidence>"
                 )
             )
@@ -1228,9 +1326,7 @@ def build_graph(settings: Settings | None = None):
                     )
                 )
                 answer = str(llm.invoke([system, repair]).content).strip()
-            if ("common" in query.lower() or "shared" in query.lower()) and _valid_citations(
-                answer, len(evidence)
-            ):
+            if "SHARED_FINDINGS" in route_tasks and _valid_citations(answer, len(evidence)):
                 critique = HumanMessage(
                     content=(
                         "Audit the candidate's claimed shared themes against each named entity's evidence. Remove "
@@ -1249,13 +1345,13 @@ def build_graph(settings: Settings | None = None):
             else:
                 grounding_context = _cited_grounding_context(answer, evidence)
                 grounded = guardrails.check_grounding(query, grounding_context, answer)
-                if grounded.blocked or not _covers_required_entities(query, answer, evidence):
+                if grounded.blocked or not _covers_required_entities(answer, evidence, route_tasks):
                     retry_prompt = HumanMessage(
                         content=(
                             "The grounding check rejected the draft. Produce a shorter answer containing only facts "
                             "directly stated in the evidence and needed by the question. Keep valid citations and do "
                             "not add any explanation, inference, implication, likelihood, or analogy. Follow these "
-                                f"requirements exactly: {answer_requirements(query, planned_dimensions)}\nQuestion: {query}\n"
+                            f"requirements exactly: {answer_requirements(query, planned_dimensions, route_tasks)}\nQuestion: {query}\n"
                             f"Evidence:\n{context}\nRejected draft:\n{answer}"
                         )
                     )
@@ -1276,7 +1372,7 @@ def build_graph(settings: Settings | None = None):
                     if (
                         _valid_citations(candidate, len(evidence))
                         and not retry_grounded.blocked
-                        and _covers_required_entities(query, candidate, evidence)
+                        and _covers_required_entities(candidate, evidence, route_tasks)
                     ):
                         answer = candidate
                     else:
@@ -1284,12 +1380,14 @@ def build_graph(settings: Settings | None = None):
                         if not filtered:
                             filtered = _filter_grounded_claims(query, answer, evidence, guardrails)
                         if _valid_citations(filtered, len(evidence)) and _covers_required_entities(
-                            query, filtered, evidence
+                            filtered, evidence, route_tasks
                         ):
                             answer = filtered
                             abstained = False
                         else:
-                            answer = "Câu trả lời không đạt ngưỡng citation và độ bám nguồn cần thiết."
+                            answer = (
+                                "Câu trả lời không đạt ngưỡng citation và độ bám nguồn cần thiết."
+                            )
                             abstained = True
 
         thread_id = str(config.get("configurable", {}).get("thread_id", "anonymous"))

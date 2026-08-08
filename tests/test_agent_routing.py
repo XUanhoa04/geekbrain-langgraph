@@ -11,6 +11,7 @@ from geekbrain_rag.agent import (
     expand_database_queries,
     expand_document_queries,
     semantic_detect_intents,
+    semantic_route,
 )
 from geekbrain_rag.config import Settings
 from geekbrain_rag.retrieval import Evidence
@@ -122,6 +123,7 @@ def test_holistic_database_expansion_is_bounded_and_multifaceted():
     queries = expand_database_queries(
         "Assess whether PaymentGW is reliable and recommend improvements.",
         ("PaymentGW", "InventorySvc"),
+        ("HOLISTIC_SYNTHESIS", "RELIABILITY", "SLA_ASSESSMENT"),
     )
     assert len(queries) <= 5
     assert any("incident history" in query and "PaymentGW" in query for query in queries)
@@ -163,20 +165,71 @@ def test_current_api_reference_is_not_live_monitoring():
 def test_quarterly_review_document_does_not_imply_database():
     question = "The Q1 2026 review mentioned NotificationSvc capacity planning concerns"
     assert detect_intents(question) == ["DOCUMENT"]
-    assert any("capacity planning" in item for item in expand_document_queries(question))
+    assert any(
+        "capacity planning" in item
+        for item in expand_document_queries(question, tasks=("CAPACITY_RISK",))
+    )
 
 
 def test_answer_requirements_preserve_named_source_types():
     requirements = answer_requirements(
-        "What should a new engineer know from onboarding and team info?"
+        "What should a new engineer know from onboarding and team info?",
+        tasks=("ONBOARDING", "OWNERSHIP"),
     )
     assert "access/setup" in requirements
     assert "technology stack" in requirements
 
 
 def test_answer_requirements_identify_live_monitoring_provenance():
-    requirements = answer_requirements("What is PaymentGW's current p99 latency?")
+    requirements = answer_requirements(
+        "What is PaymentGW's current p99 latency?", tasks=("LIVE_STATUS",)
+    )
     assert "live Monitoring API" in requirements
+
+
+def test_vietnamese_semantic_tasks_drive_onboarding_expansion_and_contract():
+    question = "Cho mình xin quy trình cho nhân sự mới"
+    queries = expand_document_queries(question, tasks=("ONBOARDING",))
+    requirements = answer_requirements(question, tasks=("ONBOARDING",))
+    assert any("onboarding checklist access training" in query for query in queries)
+    assert "required training" in requirements
+
+
+def test_vietnamese_cost_task_expands_analytics_without_english_cost_keyword():
+    queries = expand_database_queries(
+        "Tình trạng chi phí quý 1",
+        tasks=("COST_OPTIMIZATION",),
+    )
+    requirements = answer_requirements(
+        "Tình trạng chi phí quý 1",
+        tasks=("COST_OPTIMIZATION",),
+    )
+    assert any("cost totals and trends" in query for query in queries)
+    assert "historical spending period and total" in requirements
+
+
+def test_semantic_router_returns_language_independent_task_taxonomy(monkeypatch):
+    class FakeStructured:
+        @staticmethod
+        def invoke(_messages):
+            from geekbrain_rag.agent import RouteDecision
+
+            return RouteDecision(
+                intents=["DOCUMENT"],
+                rationale="Vietnamese employee induction request",
+                tasks=["ONBOARDING"],
+                document_queries=["quy trình tiếp nhận và đào tạo nhân sự mới"],
+            )
+
+    class FakeModel:
+        @staticmethod
+        def with_structured_output(_schema):
+            return FakeStructured()
+
+    monkeypatch.setattr("geekbrain_rag.agent._llm", lambda _settings: FakeModel())
+    decision = semantic_route("Cho mình xin quy trình cho nhân sự mới", Settings())
+    assert decision.tasks == ["ONBOARDING"]
+    assert decision.document_queries == ["quy trình tiếp nhận và đào tạo nhân sự mới"]
 
 
 def test_grounding_context_contains_only_cited_evidence():
