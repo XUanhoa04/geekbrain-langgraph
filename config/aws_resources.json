@@ -1,0 +1,12 @@
+{
+  "region": "us-east-1",
+  "knowledge_base_id": "",
+  "data_source_id": "",
+  "guardrail_id": "",
+  "guardrail_version": "DRAFT",
+  "source_bucket": "",
+  "source_prefix": "published/current/",
+  "vector_bucket": "",
+  "vector_index": "",
+  "role_arn": ""
+}

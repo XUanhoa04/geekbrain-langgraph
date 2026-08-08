@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+venv/
+build/
+logs/
+scratch/
+*.egg-info/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+config/aws_resources.local.json

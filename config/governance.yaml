@@ -1,0 +1,39 @@
+schema_version: 1
+default_owner: Knowledge Management
+default_review_interval_days: 180
+# Initial technical review performed during the governed migration. Owners must renew it on cadence.
+migration_reviewed_at: 2026-08-08
+allowed_extensions: [.md, .txt, .html, .pdf, .doc, .docx]
+max_source_bytes: 52428800
+publish_prefix: published/current/
+archive_prefix: published/archive/
+required_fields:
+  - source_id
+  - title
+  - owner
+  - status
+  - version
+  - reviewed_at
+  - review_interval_days
+  - checksum_sha256
+status_values: [CURRENT, ARCHIVED, DRAFT]
+ownership_rules:
+  - pattern: "team_platform.md|service_paymentgw.md|service_authsvc.md|api_*|runbook_paymentgw*"
+    owner: Team Platform
+  - pattern: "team_commerce.md|service_ordersvc.md"
+    owner: Team Commerce
+  - pattern: "team_data.md|service_frauddetector.md|service_reportingsvc.md|runbook_frauddetector*"
+    owner: Team Data
+  - pattern: "team_engagement.md|service_notificationsvc.md"
+    owner: Team Engagement
+  - pattern: "security_policy.md"
+    owner: Security
+  - pattern: "deployment_policy.md|change_management_policy.md|incident_response_policy.md|on_call_handbook.md"
+    owner: Engineering Operations
+cadence_rules:
+  - pattern: "postmortem_*|q*_review_notes.md|weekly_standup_*|architecture_review_*"
+    review_interval_days: 365
+  - pattern: "api_*|security_policy.md|deployment_policy.md|incident_response_policy.md|sla_policy.md|runbook_*"
+    review_interval_days: 180
+  - pattern: "service_*|team_*|capacity_planning_*|cost_optimization_*"
+    review_interval_days: 180

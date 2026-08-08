@@ -1,0 +1,92 @@
+digraph GeekBrainRAG {
+  graph [
+    rankdir=LR,
+    newrank=true,
+    bgcolor="#F8FAFC",
+    pad="0.35",
+    nodesep="0.42",
+    ranksep="0.55",
+    fontname="Segoe UI",
+    fontsize=20,
+    label="GeekBrain Governed Multi-Source RAG — S3 Vectors Architecture",
+    labelloc=t,
+    splines=spline
+  ];
+  node [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=10, margin="0.18,0.10", penwidth=1.7];
+  edge [fontname="Segoe UI", fontsize=9, color="#526D82", fontcolor="#334155", penwidth=1.5, arrowsize=0.8];
+
+  subgraph cluster_request {
+    label="Online Request Path";
+    color="#7C3AED";
+    fillcolor="#F5F3FF";
+    style="rounded,filled";
+    penwidth=2.2;
+
+    user [label="User / Streamlit", shape=oval, fillcolor="#E0F2FE", color="#0284C7", fontcolor="#0C4A6E"];
+    input_guard [label="Input Guardrails\nPrompt attack + credential policy", fillcolor="#FFE4E6", color="#E11D48", fontcolor="#881337"];
+    router [label="Multi-intent Router\nDOCUMENT · DATABASE · LIVE_METRICS", shape=diamond, fillcolor="#EDE9FE", color="#7C3AED", fontcolor="#4C1D95"];
+
+    kb [label="Bedrock Knowledge Base\nS3 Vectors semantic retrieval\nCURRENT / explicit DRAFT filters", fillcolor="#DCFCE7", color="#16A34A", fontcolor="#14532D"];
+    analytics [label="Safe Analytics Engine\nParameterized SELECT only\nallowlist + authorizer + limits", fillcolor="#FEF3C7", color="#D97706", fontcolor="#78350F"];
+    monitoring [label="Live Monitoring API\nservice allowlist + bounded timeout\nmetrics · status · jitter", fillcolor="#CFFAFE", color="#0891B2", fontcolor="#164E63"];
+    {rank=same; kb; analytics; monitoring;}
+
+    gather [label="Parallel Evidence Gatherer\nsource · metadata · citation ID · lineage", fillcolor="#E0E7FF", color="#4F46E5", fontcolor="#312E81"];
+    derive [label="Deterministic Evidence Engine\nSLA · historical average · capacity · deadline\nholistic digest + arithmetic verifier", fillcolor="#FAE8FF", color="#C026D3", fontcolor="#701A75"];
+    synth [label="Grounded Synthesis\nNova Pro → Nova Lite fallback", fillcolor="#DDD6FE", color="#7C3AED", fontcolor="#4C1D95"];
+    citations [label="Citation Validator\nexistence · range · repair", fillcolor="#FEF3C7", color="#D97706", fontcolor="#78350F"];
+    grounding [label="Contextual Grounding Guardrail\nchecks only cited evidence", fillcolor="#FFE4E6", color="#E11D48", fontcolor="#881337"];
+    answer [label="Cited Answer", shape=oval, fillcolor="#D1FAE5", color="#059669", fontcolor="#064E3B", penwidth=2.5];
+    abstain [label="Scoped Abstention", shape=octagon, fillcolor="#FEE2E2", color="#DC2626", fontcolor="#7F1D1D"];
+    {rank=same; answer; abstain;}
+
+    user -> input_guard;
+    input_guard -> router [label="allowed"];
+    input_guard -> abstain [label="blocked", color="#DC2626", fontcolor="#B91C1C"];
+    router -> kb [label="DOCUMENT", color="#16A34A", fontcolor="#15803D"];
+    router -> analytics [label="DATABASE", color="#D97706", fontcolor="#B45309"];
+    router -> monitoring [label="LIVE_METRICS", color="#0891B2", fontcolor="#0E7490"];
+    kb -> gather;
+    analytics -> gather;
+    monitoring -> gather;
+    gather -> derive -> synth -> citations -> grounding;
+    citations -> abstain [label="invalid after repair", color="#DC2626", fontcolor="#B91C1C"];
+    grounding -> answer [label="grounded", color="#059669", fontcolor="#047857", penwidth=2.2];
+    grounding -> abstain [label="retry fails", color="#DC2626", fontcolor="#B91C1C"];
+  }
+
+  subgraph cluster_publish {
+    label="Governed Publishing Plane";
+    color="#16A34A";
+    fillcolor="#F0FDF4";
+    style="rounded,filled";
+    penwidth=2;
+
+    sources [label="Synthetic Knowledge Sources\nCURRENT · governed DRAFT · ARCHIVED", fillcolor="#DCFCE7", color="#16A34A", fontcolor="#14532D"];
+    governance [label="Governance Pipeline\nowner · version · checksum · approval\nreviewed_at · expires_at · quarantine", fillcolor="#BBF7D0", color="#15803D", fontcolor="#14532D"];
+    s3source [label="Versioned S3 Source Bucket\npublished/current/", shape=cylinder, fillcolor="#FFEDD5", color="#EA580C", fontcolor="#7C2D12"];
+    ingestion [label="Bedrock Ingestion Job", fillcolor="#FFEDD5", color="#EA580C", fontcolor="#7C2D12"];
+    vectors [label="S3 Vector Bucket\nTitan Embed Text v2 · 1024 dimensions", shape=cylinder, fillcolor="#CFFAFE", color="#0891B2", fontcolor="#164E63"];
+    sources -> governance -> s3source -> ingestion -> vectors;
+  }
+
+  subgraph cluster_ops {
+    label="Freshness, Alerting & Privacy";
+    color="#64748B";
+    fillcolor="#F1F5F9";
+    style="rounded,filled";
+    penwidth=2;
+
+    eventbridge [label="EventBridge\nDaily Rule", fillcolor="#E2E8F0", color="#64748B", fontcolor="#1E293B"];
+    lambda [label="Freshness Lambda\nexpiry + review cadence", fillcolor="#FFEDD5", color="#EA580C", fontcolor="#7C2D12"];
+    cloudwatch [label="CloudWatch Alarm", fillcolor="#FEE2E2", color="#DC2626", fontcolor="#7F1D1D"];
+    sns [label="SNS Alerts", fillcolor="#FCE7F3", color="#DB2777", fontcolor="#831843"];
+    audit [label="Privacy-preserving Audit\nquery hash · intents · sources · latency\ncitations · abstention — no raw content", shape=cylinder, fillcolor="#E2E8F0", color="#475569", fontcolor="#0F172A"];
+    eventbridge -> lambda -> cloudwatch -> sns;
+    sns -> audit [style=invis];
+  }
+
+  vectors -> kb [label="vector index", style=dashed, color="#0891B2", fontcolor="#0E7490", constraint=false];
+  lambda -> s3source [label="registry freshness", style=dashed, color="#64748B", constraint=false];
+  answer -> audit [label="metadata only", style=dashed, color="#475569", constraint=false];
+}
