@@ -1,4 +1,4 @@
-from scripts.evaluate import valid_live_historical_comparison
+from geekbrain_rag.evaluation import valid_live_historical_comparison
 
 
 def test_evaluator_accepts_observed_direction_when_live_jitter_crosses_baseline():
