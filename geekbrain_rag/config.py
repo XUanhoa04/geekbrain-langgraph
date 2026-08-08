@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     rag_retrieval_top_k: int = Field(8, ge=1, le=100)
     rag_min_score: float = Field(0.25, ge=0, le=1)
     rag_max_tool_iterations: int = Field(6, ge=1, le=12)
+    rag_conversation_context_chars: int = Field(12_000, ge=2_000, le=50_000)
+    rag_source_timeout_seconds: float = Field(20.0, ge=1, le=60)
     rag_strict_freshness: bool = True
     monitoring_api_url: str = "http://localhost:8000"
     analytics_db_path: Path = ROOT / "data_package" / "scripts" / "geekbrain.db"

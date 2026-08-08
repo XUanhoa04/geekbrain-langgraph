@@ -1,6 +1,6 @@
-# GeekBrain Governed Multi-Source RAG
+# AegisRAG — Governed Multi-Source Intelligence
 
-Production-oriented RAG agent built with LangGraph, Amazon Bedrock Knowledge Bases and
+Enterprise-grade RAG agent built with LangGraph, Amazon Bedrock Knowledge Bases and
 **S3 Vectors**. It combines governed documents, a read-only analytics database and live
 monitoring in one cited answer without exposing arbitrary SQL or raw audit content.
 
@@ -12,8 +12,10 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 
 ## What makes it different
 
-- Accent-insensitive EN/VI multi-intent routing with bounded typo tolerance; one question can use
+- Typed semantic multi-intent routing with EN/VI lexical fallback; one question can use
   `DOCUMENT`, `DATABASE` and `LIVE_METRICS` together.
+- Runtime service discovery from the analytics database and Monitoring API; adding a service does
+  not require changing the agent source.
 - Governed ingestion: owner, version, checksum, approval, review date, expiry and status metadata.
 - Amazon Bedrock Knowledge Base backed by S3 Vectors; no OpenSearch dependency.
 - Read-only analytics with table/column/function allowlists, parameter binding, SQLite authorizer,
@@ -23,7 +25,7 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 - Runtime freshness filtering, explicit draft retrieval and archive exclusion.
 - Bedrock Guardrails plus a narrow local credential-exfiltration policy.
 - Privacy-preserving audit records: hashes, intents, sources, latency, citations and abstention only.
-- Conversation memory and bounded holistic investigation plans.
+- Conversation entity memory across the full thread plus a bounded rewrite window.
 
 ## Evaluation snapshot
 
@@ -34,12 +36,13 @@ monitoring in one cited answer without exposing arbitrary SQL or raw audit conte
 | L2 answers | 8 / 8 |
 | L3 grounded computation | 10 / 10 |
 | L4 conversations | 6 / 6 conversations, 24 / 24 turns |
-| L5 holistic investigations | 5 / 5 |
-| Unit and resilience tests | 81 passed |
+| L5 holistic investigations | 4 / 5 in the latest full AWS run; the remaining broad report safely abstained |
+| Unit and resilience tests | 82 passed |
 
 Live metrics have intentional jitter. The evaluator accepts a bounded tolerance and allows the
 observed comparison direction to differ from a static fixture when the live value and historical
-baseline are both reported correctly.
+baseline are both reported correctly. Bedrock generation and grounding checks remain
+non-deterministic; the snapshot reports the latest complete run rather than a best-of retry.
 
 ## Architecture and flows
 

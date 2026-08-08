@@ -5,7 +5,7 @@
 SVG dưới đây được render từ
 [`geekbrain-rag-architecture.dot`](diagrams/geekbrain-rag-architecture.dot) bằng Graphviz.
 
-![GeekBrain RAG architecture](diagrams/geekbrain-rag-architecture.svg)
+![AegisRAG architecture](diagrams/geekbrain-rag-architecture.svg)
 
 ## End-to-end request flow — Mermaid
 
@@ -18,11 +18,11 @@ SVG dưới đây được render từ
 flowchart LR
     U([User question]):::user --> IG{Input guardrail}:::guard
     IG -->|blocked| STOP([Safe refusal]):::blocked
-    IG -->|allowed| R{Multi-intent router}:::router
+    IG -->|allowed| R{Typed semantic<br/>multi-intent router}:::router
 
     R -->|DOCUMENT| KB[Bedrock KB<br/>S3 Vectors]:::document
     R -->|DATABASE| DB[Safe analytics<br/>SELECT only]:::database
-    R -->|LIVE_METRICS| LIVE[Monitoring API<br/>bounded allowlist]:::live
+    R -->|LIVE_METRICS| LIVE[Monitoring API<br/>discovered service catalog]:::live
 
     KB --> G[Evidence gatherer]:::core
     DB --> G
@@ -81,7 +81,7 @@ sequenceDiagram
         Agent->>DB: Allowlisted parameterized SELECT
         DB-->>Agent: Q1 average JSON
     and Live observation
-        Agent->>Mon: GET /metrics/{allowlisted-service}
+        Agent->>Mon: GET /services, then /metrics/{discovered-service}
         Mon-->>Agent: Current metric JSON + timestamp
     end
     Agent->>Derive: Join same service + metric

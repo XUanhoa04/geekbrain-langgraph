@@ -22,7 +22,7 @@ def ask(question: str, session_id: str | None = None):
 
 # ================== TEST CÁC LEVEL ==================
 if __name__ == "__main__":
-    print("🚀 GeekBrain AI Agent đang chạy...\n")
+    print("🚀 AegisRAG Intelligence Agent đang chạy...\n")
 
     # Test L1
     ask("Who is the Team Platform lead?")

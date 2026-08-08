@@ -6,13 +6,13 @@ from geekbrain_rag.agent import (
     answer_requirements,
     derive_capacity_evidence,
     derive_cross_source_evidence,
-    derive_holistic_evidence,
     derive_temporal_evidence,
     detect_intents,
-    deterministic_computational_answer,
     expand_database_queries,
     expand_document_queries,
+    semantic_detect_intents,
 )
+from geekbrain_rag.config import Settings
 from geekbrain_rag.retrieval import Evidence
 
 
@@ -78,6 +78,29 @@ def test_vietnamese_current_system_status_routes_live_metrics():
     ]
 
 
+def test_semantic_router_handles_synonyms_without_lexical_trigger(monkeypatch):
+    class FakeStructured:
+        @staticmethod
+        def invoke(_messages):
+            return type(
+                "Decision",
+                (),
+                {"intents": ["LIVE_METRICS"], "rationale": "present-time response speed"},
+            )()
+
+    class FakeModel:
+        @staticmethod
+        def with_structured_output(_schema):
+            return FakeStructured()
+
+    monkeypatch.setattr("geekbrain_rag.agent._llm", lambda _settings: FakeModel())
+    assert semantic_detect_intents(
+        "Tốc độ phản hồi của cổng thanh toán ngay lúc này ra sao?",
+        Settings(),
+        ("PaymentGW",),
+    ) == ["LIVE_METRICS"]
+
+
 def test_vietnamese_policy_and_current_latency_routes_both_sources():
     assert detect_intents("Chính sách SLA và độ trễ hiện tại của AuthSvc là gì?") == [
         "DOCUMENT",
@@ -97,12 +120,14 @@ def test_non_live_status_word_does_not_trigger_fuzzy_live_route():
 
 def test_holistic_database_expansion_is_bounded_and_multifaceted():
     queries = expand_database_queries(
-        "Assess whether PaymentGW is reliable and recommend improvements."
+        "Assess whether PaymentGW is reliable and recommend improvements.",
+        ("PaymentGW", "InventorySvc"),
     )
-    assert len(queries) == 5
-    assert any("incident history for PaymentGW" in query for query in queries)
-    assert any("monthly cost trend for PaymentGW" in query for query in queries)
-    assert any("SLA targets" in query for query in queries)
+    assert len(queries) <= 5
+    assert any("incident history" in query and "PaymentGW" in query for query in queries)
+    assert any("root cause/type" in query for query in queries)
+    assert any("operational metric aggregates" in query for query in queries)
+    assert any("matching SLA targets" in query for query in queries)
 
 
 def test_citations_must_exist_and_be_in_range():
@@ -142,7 +167,9 @@ def test_quarterly_review_document_does_not_imply_database():
 
 
 def test_answer_requirements_preserve_named_source_types():
-    requirements = answer_requirements("What should a new engineer know from onboarding and team info?")
+    requirements = answer_requirements(
+        "What should a new engineer know from onboarding and team info?"
+    )
     assert "access/setup" in requirements
     assert "technology stack" in requirements
 
@@ -212,6 +239,25 @@ def test_cross_source_derivation_abstains_on_malformed_or_missing_source():
     assert derive_cross_source_evidence("Compare", items) == []
 
 
+def test_cross_source_derivation_reports_unavailable_live_service():
+    items = [
+        Evidence(
+            "DATABASE",
+            '{"rows":[{"service":"InventorySvc","metric":"latency_p99_ms","target":200}]}',
+            "db",
+        ),
+        Evidence(
+            "LIVE_METRICS",
+            '{"observed_services":{},"errors":{"InventorySvc":"connection refused"}}',
+            "api",
+        ),
+    ]
+    derived = derive_cross_source_evidence("Is InventorySvc healthy?", items)
+    assert len(derived) == 1
+    assert '"observation_status": "UNAVAILABLE"' in derived[0].content
+    assert "not evidence of health" in derived[0].content
+
+
 def test_deadline_derivation_uses_governed_document_date():
     items = [
         Evidence(
@@ -224,6 +270,15 @@ def test_deadline_derivation_uses_governed_document_date():
     assert len(derived) == 1
     assert '"deadline": "2026-04-15"' in derived[0].content
     assert '"status": "OVERDUE"' in derived[0].content
+
+
+def test_deadline_derivation_accepts_iso_and_vietnamese_numeric_dates():
+    for raw in ("Deadline: 2026-03-15", "Hạn chót: 15/03/2026"):
+        derived = derive_temporal_evidence(
+            "Việc này đã quá hạn chưa?", [Evidence("DOCUMENT", raw, "plan.md")]
+        )
+        assert len(derived) == 1
+        assert '"deadline": "2026-03-15"' in derived[0].content
 
 
 def test_capacity_derivation_compares_live_value_to_document_threshold():
@@ -244,79 +299,3 @@ def test_capacity_derivation_compares_live_value_to_document_threshold():
     assert '"planned_capacity_threshold": 35000.0' in derived[0].content
     assert '"capacity_utilization_percent": 80.0' in derived[0].content
     assert '"proximity_verdict": "CLOSE_TO_THRESHOLD"' in derived[0].content
-
-
-def test_holistic_digest_is_extractive_and_keeps_lineage():
-    items = [
-        Evidence(
-            "DATABASE",
-            """{"purpose":"Q1 incident count","rows":[{"service":"PaymentGW",
-            "incident_count":3,"worst_p_number":1,"total_duration_minutes":180}]}""",
-            "db",
-        ),
-        Evidence(
-            "DOCUMENT",
-            "Recommendation: implement circuit breaker fallback routing.",
-            "paymentgw-postmortem.md",
-        ),
-    ]
-    derived = derive_holistic_evidence(
-        "Assess whether PaymentGW is reliable and recommend improvements.", items
-    )
-    assert len(derived) == 1
-    assert "implement circuit breaker fallback routing" in derived[0].content
-    assert "PaymentGW had 3 Q1 incidents" in derived[0].content
-    assert sorted(derived[0].metadata["lineage"]) == ["db", "paymentgw-postmortem.md"]
-
-
-def test_growth_answer_is_rendered_from_database_derivation():
-    evidence = [
-        {
-            "citation_id": 1,
-            "kind": "DATABASE",
-            "content": """{"derived":{"start_month":"2026-01",
-            "start_average_requests_per_minute":24000,"end_month":"2026-03",
-            "end_average_requests_per_minute":27000,
-            "absolute_growth_requests_per_minute":3000,"percentage_growth":12.5}}""",
-        }
-    ]
-    answer = deterministic_computational_answer("How fast is it growing?", evidence)
-    assert answer is not None
-    assert "12.5%" in answer
-    assert "24000" in answer and "27000" in answer
-
-
-def test_current_latency_answer_always_names_live_provenance():
-    evidence = [
-        {
-            "citation_id": 1,
-            "kind": "LIVE_METRICS",
-            "content": '{"observed_services":{"PaymentGW":{"latency_ms":{"p99":176}}}}',
-        }
-    ]
-    answer = deterministic_computational_answer(
-        "What is PaymentGW's current p99 latency?", evidence
-    )
-    assert answer is not None
-    assert "live Monitoring API" in answer
-    assert "176 ms [1]" in answer
-
-
-def test_live_average_answer_uses_observed_direction_not_static_fixture():
-    evidence = [
-        {
-            "citation_id": 3,
-            "kind": "DERIVED",
-            "source": "Deterministic cross-source comparison",
-            "content": """{"comparisons":[{"service":"PaymentGW",
-            "metric":"latency_p99_ms","current_value":178,
-            "historical_average":183.0016,"difference":-5.0016,
-            "percentage_difference":-2.7331,"observed_direction":"below"}]}""",
-        }
-    ]
-    answer = deterministic_computational_answer(
-        "Compare PaymentGW's current p99 latency to its Q1 2026 daily average.", evidence
-    )
-    assert answer is not None
-    assert "live Monitoring API" in answer and "analytics database" in answer
-    assert "below the historical average [3]" in answer

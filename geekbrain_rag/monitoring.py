@@ -2,42 +2,20 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import quote
 
 import requests
 
+from .catalog import match_services
 from .config import Settings
 from .retrieval import Evidence
 
-SERVICES = (
-    "PaymentGW",
-    "AuthSvc",
-    "OrderSvc",
-    "NotificationSvc",
-    "FraudDetector",
-    "ReportingSvc",
-)
 MAX_SERVICES_PER_QUERY = 20
-SERVICE_NAME_RE = re.compile(
-    r"\b([A-Za-z][A-Za-z0-9-]{1,48}(?:Svc|Service|GW|Gateway|Detector))\b",
-    re.IGNORECASE,
-)
 
 
-def select_services(question: str) -> list[str]:
-    explicit = [service for service in SERVICES if service.lower() in question.lower()]
-    lowered = question.lower()
-    aliases = {
-        "payment gateway": "PaymentGW",
-        "notification service": "NotificationSvc",
-        "order service": "OrderSvc",
-        "reporting service": "ReportingSvc",
-        "auth service": "AuthSvc",
-    }
-    explicit.extend(canonical for alias, canonical in aliases.items() if alias in lowered)
-    explicit.extend(match.group(1) for match in SERVICE_NAME_RE.finditer(question))
-    explicit = list(dict.fromkeys(explicit))
+def select_services(question: str, catalog: tuple[str, ...] = ()) -> list[str]:
+    explicit = match_services(question, catalog)
     comparative = bool(
         re.search(
             r"(?i)\b(all|across|compare|comparison|highest|lowest|most|least|rank|every|"
@@ -46,18 +24,58 @@ def select_services(question: str) -> list[str]:
         )
     )
     if comparative:
-        return list(dict.fromkeys([*SERVICES, *explicit]))[:MAX_SERVICES_PER_QUERY]
+        return list(dict.fromkeys([*catalog, *explicit]))[:MAX_SERVICES_PER_QUERY]
     if not explicit:
-        return list(SERVICES)
+        return list(catalog)[:MAX_SERVICES_PER_QUERY]
     return explicit[:MAX_SERVICES_PER_QUERY]
 
 
 @dataclass(slots=True)
 class MonitoringClient:
     settings: Settings
+    _service_cache: tuple[str, ...] | None = field(default=None, init=False, repr=False)
+
+    def available_services(self) -> tuple[str, ...]:
+        """Discover the monitoring inventory from the API instead of source code."""
+        if self._service_cache is not None:
+            return self._service_cache
+        try:
+            response = requests.get(
+                f"{self.settings.monitoring_api_url.rstrip('/')}/services",
+                timeout=(2, 5),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, list):
+                raise TypeError("Monitoring service catalog must be a JSON list")
+            services = tuple(
+                dict.fromkeys(
+                    str(value)
+                    for value in payload
+                    if isinstance(value, str)
+                    and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{1,63}", value)
+                )
+            )
+            self._service_cache = services[:MAX_SERVICES_PER_QUERY]
+        except (requests.RequestException, TypeError, ValueError):
+            self._service_cache = ()
+        return self._service_cache
 
     def query(self, question: str) -> Evidence:
-        services = select_services(question)
+        catalog = self.available_services()
+        services = select_services(question, catalog)
+        if not services:
+            return Evidence(
+                "LIVE_METRICS_ERROR",
+                json.dumps(
+                    {
+                        "observed_services": {},
+                        "errors": {"catalog": "service discovery unavailable"},
+                    }
+                ),
+                "Monitoring API",
+                metadata={"reason": "SERVICE_DISCOVERY_UNAVAILABLE"},
+            )
         include_status = bool(
             re.search(
                 r"(?i)\b(healthy|health|status|running normally|degraded|active alerts?|reliable|"

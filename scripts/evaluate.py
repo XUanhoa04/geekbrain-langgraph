@@ -65,6 +65,13 @@ def normalized_tokens(text: str) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 1}
 
 
+def has_numeric_citation(text: str) -> bool:
+    return any(
+        re.fullmatch(r"\s*\d+(?:\s*[,;]\s*\d+)*\s*", group)
+        for group in re.findall(r"\[([^\[\]]+)\]", text)
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run reproducible retrieval or end-to-end RAG evaluation"
@@ -155,7 +162,7 @@ def main() -> None:
                     turn_question, answer, expected_answer
                 )
                 turn_ok = (
-                    bool(re.search(r"\[\d+\]", answer))
+                    has_numeric_citation(answer)
                     and (verdict.score >= required_score or arithmetic_override)
                 )
                 turn_results.append(

@@ -6,7 +6,6 @@ import pytest
 from geekbrain_rag.analytics import (
     AnalyticsEngine,
     SQLPlan,
-    deterministic_plan,
     validate_readonly_sql,
 )
 from geekbrain_rag.config import Settings
@@ -105,8 +104,6 @@ def test_execute_rejects_unbounded_parameter_value(tmp_path: Path):
 def test_service_catalog_supports_new_database_service(tmp_path: Path):
     engine = AnalyticsEngine(Settings(analytics_db_path=_analytics_db(tmp_path / "analytics.db")))
     assert engine.available_services() == ("UserService",)
-    plan = engine.plan("Has UserService had any recent incidents?")
-    assert plan.parameters == ["UserService"]
 
 
 def test_sqlite_query_only_is_available():
@@ -114,15 +111,6 @@ def test_sqlite_query_only_is_available():
         assert conn.execute("PRAGMA query_only").fetchone()[0] == 0
         conn.execute("PRAGMA query_only=ON")
         assert conn.execute("PRAGMA query_only").fetchone()[0] == 1
-
-
-def test_deterministic_company_total_does_not_filter_geekbrain_as_service():
-    plan = deterministic_plan(
-        "What was GeekBrain's total infrastructure cost across all services in Q1 2026?"
-    )
-    assert plan is not None
-    assert "service =" not in plan.sql
-    assert plan.parameters == ["2026-01", "2026-03"]
 
 
 def test_quarter_cost_derivation_is_deterministic():
@@ -134,13 +122,6 @@ def test_quarter_cost_derivation_is_deterministic():
     derived = AnalyticsEngine.derive("cost from Q4 2025 to Q1 2026", rows)
     assert derived["absolute_change"] == 100.0
     assert derived["percentage_change"] == 50.0
-
-
-def test_most_severe_incident_plan_orders_by_p_number():
-    plan = deterministic_plan("Tell me about the most severe incident in Q1 2026.")
-    assert plan is not None
-    assert "SUBSTR(severity, 2)" in plan.sql
-    assert plan.parameters == ["2026-01-01", "2026-03-31"]
 
 
 def test_request_growth_derivation_is_deterministic():
@@ -158,9 +139,7 @@ def test_growth_projection_to_capacity_target_is_deterministic():
         {"month": "2026-01", "avg_requests_per_minute": 24000},
         {"month": "2026-03", "avg_requests_per_minute": 27000},
     ]
-    derived = AnalyticsEngine.derive(
-        "At that growth rate, when would AuthSvc hit 35k?", rows
-    )
+    derived = AnalyticsEngine.derive("At that growth rate, when would AuthSvc hit 35k?", rows)
     assert derived["target_requests_per_minute"] == 35000
     assert 2 <= derived["estimated_quarters_to_target"] <= 3
 

@@ -122,8 +122,73 @@ class Guardrails:
                 {"text": {"text": query[:10_000], "qualifiers": ["query"]}},
                 {"text": {"text": answer[:20_000], "qualifiers": ["guard_content"]}},
             ],
-            outputScope="INTERVENTIONS",
+            outputScope="FULL",
         )
         action = response.get("action", "NONE")
         output = " ".join(item.get("text", "") for item in response.get("outputs", [])) or answer
-        return GuardrailResult(action == "GUARDRAIL_INTERVENED", output, action)
+        assessments = response.get("assessments", [])
+        contextual_filters = [
+            item
+            for assessment in assessments
+            for item in assessment.get("contextualGroundingPolicy", {}).get("filters", [])
+        ]
+        grounding_detected = any(
+            item.get("type") == "GROUNDING" and item.get("detected")
+            for item in contextual_filters
+        )
+        relevance_detected = any(
+            item.get("type") == "RELEVANCE" and item.get("detected")
+            for item in contextual_filters
+        )
+
+        def has_detected_policy(value: object) -> bool:
+            if isinstance(value, dict):
+                return value.get("detected") is True or any(
+                    has_detected_policy(item) for item in value.values()
+                )
+            if isinstance(value, list):
+                return any(has_detected_policy(item) for item in value)
+            return False
+
+        other_policy_detected = any(
+            has_detected_policy(
+                {key: value for key, value in assessment.items() if key != "contextualGroundingPolicy"}
+            )
+            for assessment in assessments
+        )
+        # Bedrock's relevance filter is calibrated for short answers and can flag a
+        # grounded subsection of a broad, multi-part report. Relevance-only findings
+        # trigger no destructive rewrite; unsupported grounding and all other safety
+        # policies continue to block.
+        blocked = bool(
+            grounding_detected
+            or other_policy_detected
+            or (action == "GUARDRAIL_INTERVENED" and not relevance_detected)
+        )
+        return GuardrailResult(blocked, output if blocked else answer, action)
+
+    def check_claim_support(
+        self, query: str, grounding_source: str, claim: str
+    ) -> GuardrailResult:
+        """At claim granularity, enforce support without misusing whole-answer relevance."""
+        if not self.enabled or not grounding_source.strip():
+            return GuardrailResult(False, claim)
+        response = self.client.apply_guardrail(
+            guardrailIdentifier=self.settings.bedrock_guardrail_id,
+            guardrailVersion=self.settings.bedrock_guardrail_version,
+            source="OUTPUT",
+            content=[
+                {"text": {"text": grounding_source[:80_000], "qualifiers": ["grounding_source"]}},
+                {"text": {"text": query[:10_000], "qualifiers": ["query"]}},
+                {"text": {"text": claim[:20_000], "qualifiers": ["guard_content"]}},
+            ],
+            outputScope="FULL",
+        )
+        grounding_filters = [
+            item
+            for assessment in response.get("assessments", [])
+            for item in assessment.get("contextualGroundingPolicy", {}).get("filters", [])
+            if item.get("type") == "GROUNDING"
+        ]
+        unsupported = any(item.get("detected") for item in grounding_filters)
+        return GuardrailResult(unsupported, claim, "CLAIM_GROUNDING")

@@ -1,4 +1,4 @@
-digraph GeekBrainRAG {
+digraph AegisRAG {
   graph [
     rankdir=LR,
     newrank=true,
@@ -8,7 +8,7 @@ digraph GeekBrainRAG {
     ranksep="0.55",
     fontname="Segoe UI",
     fontsize=20,
-    label="GeekBrain Governed Multi-Source RAG — S3 Vectors Architecture",
+    label="AegisRAG — Governed Multi-Source Intelligence on S3 Vectors",
     labelloc=t,
     splines=spline
   ];
@@ -28,7 +28,7 @@ digraph GeekBrainRAG {
 
     kb [label="Bedrock Knowledge Base\nS3 Vectors semantic retrieval\nCURRENT / explicit DRAFT filters", fillcolor="#DCFCE7", color="#16A34A", fontcolor="#14532D"];
     analytics [label="Safe Analytics Engine\nParameterized SELECT only\nallowlist + authorizer + limits", fillcolor="#FEF3C7", color="#D97706", fontcolor="#78350F"];
-    monitoring [label="Live Monitoring API\nservice allowlist + bounded timeout\nmetrics · status · jitter", fillcolor="#CFFAFE", color="#0891B2", fontcolor="#164E63"];
+    monitoring [label="Live Monitoring API\ndiscovered catalog + bounded timeout\nmetrics · status · jitter", fillcolor="#CFFAFE", color="#0891B2", fontcolor="#164E63"];
     {rank=same; kb; analytics; monitoring;}
 
     gather [label="Parallel Evidence Gatherer\nsource · metadata · citation ID · lineage", fillcolor="#E0E7FF", color="#4F46E5", fontcolor="#312E81"];
