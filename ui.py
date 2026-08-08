@@ -106,99 +106,149 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    /* Dark theme override */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+    /* Global Typography */
+    html, body, [class*="css"]  {
+        font-family: 'Inter', sans-serif !important;
+    }
+
+    /* Dark theme with Mesh Gradient Background */
     .stApp {
-        background-color: #0e1117;
+        background: radial-gradient(circle at 15% 50%, rgba(31, 28, 71, 1) 0%, rgba(13, 14, 21, 1) 100%);
+        color: #e2e8f0;
     }
 
-    /* Sidebar styling */
+    /* Sidebar Glassmorphism */
     section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #30363d;
+        background: rgba(22, 27, 34, 0.4) !important;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
     }
 
-    /* Header styling */
+    /* Premium Header styling */
     .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%);
+        backdrop-filter: blur(10px);
+        padding: 2.5rem 3rem;
+        border-radius: 20px;
+        margin-bottom: 2rem;
         color: white;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
     .main-header h1 {
         margin: 0;
-        font-size: 1.8rem;
-        font-weight: 700;
+        font-size: 2.5rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.4);
     }
     .main-header p {
-        margin: 0.3rem 0 0 0;
-        opacity: 0.85;
-        font-size: 0.95rem;
+        margin: 0.5rem 0 0 0;
+        opacity: 0.9;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 0.5px;
     }
 
     /* Chat message styling */
     .stChatMessage {
-        border-radius: 12px !important;
-        margin-bottom: 0.8rem !important;
+        background: rgba(30, 41, 59, 0.6) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px !important;
+        margin-bottom: 1.2rem !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .stChatMessage:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
     }
 
     /* Trace panel styling */
     .trace-card {
-        background: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 0.6rem;
+        background: rgba(22, 27, 34, 0.6);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+    .trace-card:hover {
+        border-color: rgba(102, 126, 234, 0.5);
+        box-shadow: 0 4px 25px rgba(102, 126, 234, 0.15);
     }
     .trace-step {
-        background: #1c2333;
-        border-left: 3px solid #667eea;
-        padding: 0.6rem 1rem;
-        margin: 0.5rem 0;
-        border-radius: 0 8px 8px 0;
-        font-size: 0.85rem;
+        background: rgba(28, 35, 51, 0.7);
+        border-left: 4px solid #667eea;
+        padding: 0.8rem 1.2rem;
+        margin: 0.6rem 0;
+        border-radius: 0 10px 10px 0;
+        font-size: 0.9rem;
+        transition: transform 0.2s ease, background 0.2s ease;
     }
-    .trace-step-rag {
-        border-left-color: #3fb950;
+    .trace-step:hover {
+        transform: translateX(6px);
+        background: rgba(45, 55, 72, 0.8);
     }
-    .trace-step-tool {
-        border-left-color: #f0883e;
-    }
-    .trace-step-router {
-        border-left-color: #a371f7;
-    }
-
-    /* Status badge */
-    .status-badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    .status-online {
-        background: #1a3a2a;
-        color: #3fb950;
-    }
+    .trace-step-rag { border-left-color: #00f2fe; }
+    .trace-step-tool { border-left-color: #f6d365; }
+    .trace-step-router { border-left-color: #a371f7; }
 
     /* Metric cards in sidebar */
     .metric-card {
-        background: #1c2333;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 0.8rem;
-        margin: 0.4rem 0;
+        background: rgba(28, 35, 51, 0.5);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 14px;
+        padding: 1.2rem;
+        margin: 0.5rem 0;
         text-align: center;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .metric-card:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        border-color: rgba(255,255,255,0.15);
     }
     .metric-value {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #667eea;
+        font-size: 2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
     .metric-label {
-        font-size: 0.75rem;
-        color: #8b949e;
-        margin-top: 0.2rem;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #94a3b8;
+        margin-top: 0.5rem;
+        font-weight: 600;
+    }
+    
+    /* Input box glowing focus */
+    .stChatInputContainer {
+        border-radius: 20px !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        backdrop-filter: blur(12px) !important;
+        transition: all 0.3s ease;
+    }
+    .stChatInputContainer:focus-within {
+        border-color: #667eea !important;
+        box-shadow: 0 0 25px rgba(102, 126, 234, 0.4) !important;
     }
 </style>
 """,
