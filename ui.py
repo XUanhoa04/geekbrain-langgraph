@@ -1,152 +1,11 @@
 import html
-import re
 import uuid
-from collections import Counter
 
 import streamlit as st
 from langchain_core.messages import HumanMessage
 
+from geekbrain_rag.presentation import remove_private_reasoning, source_items
 from graph import app
-
-
-def get_relevant_snippet(chunk_text, answer):
-    # Dùng regex để loại bỏ các ký tự không phải chữ/số, chuyển thành chữ thường
-    clean_ans = re.sub(r"[^\w\s]", "", answer).lower()
-    stopwords = {
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "was",
-        "were",
-        "and",
-        "or",
-        "but",
-        "in",
-        "on",
-        "at",
-        "to",
-        "for",
-        "of",
-        "with",
-        "by",
-        "from",
-        "this",
-        "that",
-        "it",
-        "they",
-        "we",
-        "you",
-        "i",
-        "he",
-        "she",
-        "as",
-        "be",
-        "have",
-        "has",
-        "had",
-    }
-    # Lấy các từ khóa thực sự
-    keywords = {w for w in clean_ans.split() if w not in stopwords and len(w) > 1}
-
-    if not keywords:
-        return chunk_text[:200] + ("..." if len(chunk_text) > 200 else "")
-
-    chunk_clean = chunk_text.lower()
-
-    # Tính tần suất (term frequency) trong chunk
-    words_in_chunk = re.findall(r"\b\w+\b", chunk_clean)
-    word_freq = Counter(words_in_chunk)
-
-    lines = chunk_text.split("\n")
-    best_line_idx = -1
-    best_score = -1
-
-    for i, line in enumerate(lines):
-        line_clean = line.lower()
-        score = 0
-        for k in keywords:
-            if re.search(r"\b" + re.escape(k) + r"\b", line_clean):
-                freq = word_freq.get(k, 1)
-                # Điểm tỉ lệ nghịch với tần suất (tương tự IDF)
-                score += 100.0 / freq
-
-        if score > best_score and line.strip() != "":
-            best_score = score
-            best_line_idx = i
-
-    if best_line_idx == -1:
-        snippet = chunk_text[:200]
-    else:
-        # Lấy 1 dòng trước, dòng hiện tại, và 2 dòng sau
-        start_idx = max(0, best_line_idx - 1)
-        end_idx = min(len(lines), best_line_idx + 3)
-        snippet = "\n".join(lines[start_idx:end_idx])
-
-    # Làm đẹp kết quả
-    snippet = snippet.strip()
-    if not chunk_text.startswith(snippet):
-        snippet = "... " + snippet
-    if not chunk_text.endswith(snippet):
-        snippet = snippet + " ..."
-
-    return snippet
-
-
-def remove_private_reasoning(text):
-    """Drop model-only thinking blocks before rendering or storing an answer."""
-    return re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL).strip()
-
-
-def source_items(raw_sources, answer):
-    """Return the cited, de-duplicated source excerpts used by an answer."""
-    items = []
-    seen = set()
-
-    for raw_source in raw_sources:
-        for chunk_index, raw_chunk in enumerate(raw_source.split("\n\n---\n\n"), start=1):
-            chunk = raw_chunk.strip()
-            if not chunk:
-                continue
-
-            lines = chunk.splitlines()
-            heading = lines[0].strip()
-            numbered = re.match(r"^\[(\d+)\]\s+Source:\s*(.+)$", heading)
-            named = re.match(r"^\[Source:\s*(.+)\]$", heading)
-            evidence = re.match(
-                r"^\[(\d+)\]\s+kind=([^;]+);\s+source=([^;]+);",
-                heading,
-            )
-
-            if evidence:
-                citation, _kind, source_name = evidence.groups()
-                if f"[{citation}]" not in answer and source_name not in answer:
-                    continue
-                title = f"[{citation}] {source_name.strip()}"
-                content = "\n".join(lines[1:]).strip()
-            elif numbered:
-                citation, source_name = numbered.groups()
-                if f"[{citation}]" not in answer and source_name not in answer:
-                    continue
-                title = f"[{citation}] {source_name.strip()}"
-                content = "\n".join(lines[1:]).strip()
-            elif named:
-                source_name = named.group(1).strip()
-                if source_name not in answer:
-                    continue
-                title = source_name
-                content = "\n".join(lines[1:]).strip()
-            else:
-                title = f"Retrieved evidence {chunk_index}"
-                content = chunk
-
-            key = (title, content)
-            if content and key not in seen:
-                seen.add(key)
-                items.append((title, get_relevant_snippet(content, answer)))
-
-    return items
 
 
 def render_sources(raw_sources, answer):
@@ -183,6 +42,7 @@ st.markdown(
         --accent: #276247;
         --accent-soft: #e3eee7;
         --amber: #a96d22;
+        --focus: #174b35;
     }
 
     html, body, [class*="css"] {
@@ -235,6 +95,10 @@ st.markdown(
         border-radius: 10px !important;
         margin-bottom: 0.8rem !important;
         box-shadow: 0 1px 2px rgba(32, 35, 31, 0.04);
+    }
+
+    .stChatMessage [data-testid="stMarkdownContainer"] {
+        line-height: 1.65;
     }
 
     .trace-card {
@@ -290,6 +154,18 @@ st.markdown(
 
     .stButton > button:hover {
         border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    button:focus-visible,
+    textarea:focus-visible {
+        outline: 3px solid var(--focus) !important;
+        outline-offset: 2px;
+    }
+
+    div[data-testid="stPopover"] > button {
+        min-height: 2.25rem;
+        border-color: var(--line);
         color: var(--accent);
     }
 
@@ -350,6 +226,7 @@ with st.sidebar:
 
     st.caption(f"Thread `{st.session_state.session_id[:8]}`")
     st.caption("Model `Claude Haiku 4.5`")
+    st.caption("Answers expose cited source excerpts, not private reasoning.")
     st.divider()
 
     st.markdown("#### Recent questions")
