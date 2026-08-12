@@ -96,8 +96,8 @@ def get_relevant_snippet(chunk_text, answer):
 
 # ================== PAGE CONFIG ==================
 st.set_page_config(
-    page_title="AegisRAG Intelligence Console",
-    page_icon="🧠",
+    page_title="AegisRAG Workspace",
+    page_icon="A",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -106,149 +106,140 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-
-    /* Global Typography */
-    html, body, [class*="css"]  {
-        font-family: 'Inter', sans-serif !important;
+    :root {
+        --canvas: #f5f5f0;
+        --surface: #ffffff;
+        --surface-muted: #f0f1eb;
+        --ink: #20231f;
+        --muted: #687068;
+        --line: #dfe2da;
+        --accent: #276247;
+        --accent-soft: #e3eee7;
+        --amber: #a96d22;
     }
 
-    /* Dark theme with Mesh Gradient Background */
+    html, body, [class*="css"] {
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
     .stApp {
-        background: radial-gradient(circle at 15% 50%, rgba(31, 28, 71, 1) 0%, rgba(13, 14, 21, 1) 100%);
-        color: #e2e8f0;
+        background: var(--canvas);
+        color: var(--ink);
     }
 
-    /* Sidebar Glassmorphism */
+    .block-container {
+        max-width: 920px;
+        padding-top: 2.5rem;
+        padding-bottom: 7rem;
+    }
+
     section[data-testid="stSidebar"] {
-        background: rgba(22, 27, 34, 0.4) !important;
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+        background: #eceee8 !important;
+        border-right: 1px solid var(--line) !important;
     }
 
-    /* Premium Header styling */
-    .main-header {
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%);
-        backdrop-filter: blur(10px);
-        padding: 2.5rem 3rem;
-        border-radius: 20px;
-        margin-bottom: 2rem;
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 2rem;
     }
-    
-    @keyframes fadeInDown {
-        from { opacity: 0; transform: translateY(-30px); }
-        to { opacity: 1; transform: translateY(0); }
+
+    .main-header {
+        padding: 0.5rem 0 1.5rem;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--line);
     }
 
     .main-header h1 {
         margin: 0;
-        font-size: 2.5rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.4);
+        color: var(--ink);
+        font-size: clamp(1.8rem, 4vw, 2.35rem);
+        font-weight: 680;
+        letter-spacing: -0.04em;
     }
+
     .main-header p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
-        font-size: 1.1rem;
-        font-weight: 300;
-        letter-spacing: 0.5px;
+        margin: 0.45rem 0 0;
+        color: var(--muted);
+        font-size: 1rem;
     }
 
-    /* Chat message styling */
     .stChatMessage {
-        background: rgba(30, 41, 59, 0.6) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px !important;
-        margin-bottom: 1.2rem !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .stChatMessage:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+        background: var(--surface) !important;
+        border: 1px solid var(--line);
+        border-radius: 10px !important;
+        margin-bottom: 0.8rem !important;
+        box-shadow: 0 1px 2px rgba(32, 35, 31, 0.04);
     }
 
-    /* Trace panel styling */
     .trace-card {
-        background: rgba(22, 27, 34, 0.6);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 1.2rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.85rem;
+        margin-bottom: 0.75rem;
     }
-    .trace-card:hover {
-        border-color: rgba(102, 126, 234, 0.5);
-        box-shadow: 0 4px 25px rgba(102, 126, 234, 0.15);
-    }
-    .trace-step {
-        background: rgba(28, 35, 51, 0.7);
-        border-left: 4px solid #667eea;
-        padding: 0.8rem 1.2rem;
-        margin: 0.6rem 0;
-        border-radius: 0 10px 10px 0;
-        font-size: 0.9rem;
-        transition: transform 0.2s ease, background 0.2s ease;
-    }
-    .trace-step:hover {
-        transform: translateX(6px);
-        background: rgba(45, 55, 72, 0.8);
-    }
-    .trace-step-rag { border-left-color: #00f2fe; }
-    .trace-step-tool { border-left-color: #f6d365; }
-    .trace-step-router { border-left-color: #a371f7; }
 
-    /* Metric cards in sidebar */
+    .trace-step {
+        border-left: 2px solid var(--accent);
+        padding: 0.35rem 0 0.35rem 0.65rem;
+        margin: 0.45rem 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+    }
+
+    .trace-step-rag { border-left-color: var(--accent); }
+    .trace-step-tool { border-left-color: var(--amber); }
+    .trace-step-router { border-left-color: #63758a; }
+
     .metric-card {
-        background: rgba(28, 35, 51, 0.5);
-        backdrop-filter: blur(4px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 14px;
-        padding: 1.2rem;
-        margin: 0.5rem 0;
-        text-align: center;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        background: transparent;
+        border-top: 1px solid var(--line);
+        padding: 0.8rem 0;
+        margin: 0.25rem 0;
     }
-    .metric-card:hover {
-        transform: translateY(-4px) scale(1.02);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-        border-color: rgba(255,255,255,0.15);
-    }
+
     .metric-value {
-        font-size: 2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: var(--ink);
+        font-size: 1.35rem;
+        font-weight: 650;
     }
+
     .metric-label {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #94a3b8;
-        margin-top: 0.5rem;
-        font-weight: 600;
+        color: var(--muted);
+        font-size: 0.76rem;
+        margin-top: 0.1rem;
     }
-    
-    /* Input box glowing focus */
+
     .stChatInputContainer {
-        border-radius: 20px !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        background: rgba(15, 23, 42, 0.8) !important;
-        backdrop-filter: blur(12px) !important;
-        transition: all 0.3s ease;
+        background: var(--surface) !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 6px 24px rgba(32, 35, 31, 0.08) !important;
     }
+
     .stChatInputContainer:focus-within {
-        border-color: #667eea !important;
-        box-shadow: 0 0 25px rgba(102, 126, 234, 0.4) !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-soft) !important;
+    }
+
+    .stButton > button {
+        border-color: var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+    }
+
+    .stButton > button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    @media (max-width: 640px) {
+        .block-container {
+            padding-top: 1.25rem;
+        }
+        .main-header {
+            padding-top: 0;
+        }
     }
 </style>
 """,
@@ -267,9 +258,10 @@ if "total_queries" not in st.session_state:
 
 # ================== SIDEBAR ==================
 with st.sidebar:
-    st.markdown("### ⚙️ Control Panel")
+    st.markdown("### AegisRAG")
+    st.caption("Governed knowledge workspace")
 
-    if st.button("🔄 New Conversation", use_container_width=True):
+    if st.button("New conversation", use_container_width=True):
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.messages = []
         st.session_state.traces = []
@@ -279,7 +271,7 @@ with st.sidebar:
     st.divider()
 
     # Session info
-    st.markdown("### 📊 Session Info")
+    st.markdown("#### Session")
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(
@@ -298,13 +290,13 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-    st.caption(f"🔑 Thread: `{st.session_state.session_id[:8]}...`")
-    st.caption("🤖 Model: `Claude Haiku 4.5`")
+    st.caption(f"Thread `{st.session_state.session_id[:8]}`")
+    st.caption("Model `Claude Haiku 4.5`")
 
     st.divider()
 
     # Trace panel in sidebar
-    st.markdown("### 🔍 Agent Trace")
+    st.markdown("#### Activity")
     if st.session_state.traces:
         for trace in st.session_state.traces:
             st.markdown(trace, unsafe_allow_html=True)
@@ -327,15 +319,15 @@ with st.sidebar:
             width=0,
         )
     else:
-        st.caption("Traces will appear here after you send a message.")
+        st.caption("Activity will appear after your first question.")
 
 # ================== MAIN AREA ==================
 # Header
 st.markdown(
     """
 <div class="main-header">
-    <h1>🛡️ AegisRAG Intelligence Console</h1>
-    <p>Governed multi-source intelligence powered by Amazon Bedrock</p>
+    <h1>Ask across your operations</h1>
+    <p>Policies, services, costs and live metrics — grounded in governed sources.</p>
 </div>
 """,
     unsafe_allow_html=True,
