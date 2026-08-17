@@ -13,7 +13,8 @@ def render_sources(raw_sources, answer):
     if not items:
         return
 
-    with st.popover(f"Sources · {len(items)}"):
+    label = f"Sources · {len(items)}" if len(items) > 1 else "Source · 1"
+    with st.popover(label):
         st.caption("Only evidence referenced by this answer is shown.")
         for title, excerpt in items:
             with st.expander(title):
@@ -276,21 +277,16 @@ if prompt := st.chat_input("Ask about a service, policy, cost or live metric"):
                 stream_mode="updates",
             ):
                 for state_update in event.values():
-                    messages = state_update.get("messages", [])
-                    if isinstance(messages, list) and messages:
-                        last_message = messages[-1]
-                        if (
-                            getattr(last_message, "name", None) == "search_documents"
-                            and last_message.content
-                        ):
-                            current_sources.append(last_message.content)
-
-                    if state_update.get("retrieved_context"):
+                    if isinstance(state_update, dict) and state_update.get("retrieved_context"):
                         current_sources.append(state_update["retrieved_context"])
 
             final_state = app.get_state(config)
-            raw_answer = final_state.values["messages"][-1].content
-            answer = remove_private_reasoning(raw_answer)
+            messages = final_state.values.get("messages", [])
+            if messages:
+                raw_answer = getattr(messages[-1], "content", str(messages[-1]))
+                answer = remove_private_reasoning(raw_answer)
+            else:
+                answer = "Không nhận được phản hồi từ hệ thống."
 
         st.markdown(answer)
         render_sources(current_sources, answer)
