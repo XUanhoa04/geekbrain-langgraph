@@ -1,4 +1,8 @@
-from geekbrain_rag.presentation import remove_private_reasoning, source_items
+from geekbrain_rag.presentation import (
+    relevant_snippet,
+    remove_private_reasoning,
+    source_items,
+)
 
 
 def test_private_reasoning_is_never_rendered() -> None:
@@ -30,3 +34,29 @@ The service latency is 182 ms."""
     items = source_items([evidence], "The monitoring_api reports 182 ms latency.")
 
     assert items == [("monitoring_api", "The service latency is 182 ms.")]
+
+
+def test_relevant_snippet_boundary_ellipsis() -> None:
+    chunk = (
+        "Header Section\n"
+        "First line of content\n"
+        "Second line describing payment metrics\n"
+        "Third line with details\n"
+        "Fourth line concluding remarks\n"
+        "Final footer notes"
+    )
+
+    # Match near start: no leading ellipsis, trailing ellipsis present
+    snippet_start = relevant_snippet(chunk, "Header Section and first line")
+    assert not snippet_start.startswith("... ")
+    assert snippet_start.endswith(" ...")
+
+    # Match near end: leading ellipsis present, no trailing ellipsis
+    snippet_end = relevant_snippet(chunk, "Final footer notes")
+    assert snippet_end.startswith("... ")
+    assert not snippet_end.endswith(" ...")
+
+    # Match in middle: both leading and trailing ellipsis
+    snippet_mid = relevant_snippet(chunk, "payment metrics with details")
+    assert snippet_mid.startswith("... ")
+    assert snippet_mid.endswith(" ...")

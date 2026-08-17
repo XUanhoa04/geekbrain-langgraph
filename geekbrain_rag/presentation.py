@@ -64,18 +64,22 @@ def relevant_snippet(chunk_text: str, answer: str) -> str:
             best_line_index = index
 
     if best_line_index == -1:
-        snippet = chunk_text[:200]
+        raw_snippet = chunk_text[:200].strip()
     else:
         start_index = max(0, best_line_index - 1)
         end_index = min(len(lines), best_line_index + 3)
-        snippet = "\n".join(lines[start_index:end_index])
+        raw_snippet = "\n".join(lines[start_index:end_index]).strip()
 
-    snippet = snippet.strip()
-    if not chunk_text.startswith(snippet):
-        snippet = "... " + snippet
-    if not chunk_text.endswith(snippet):
-        snippet += " ..."
-    return snippet
+    if not raw_snippet:
+        return ""
+
+    trimmed_chunk = chunk_text.strip()
+    has_prefix = not trimmed_chunk.startswith(raw_snippet)
+    has_suffix = not trimmed_chunk.endswith(raw_snippet)
+
+    prefix = "... " if has_prefix else ""
+    suffix = " ..." if has_suffix else ""
+    return f"{prefix}{raw_snippet}{suffix}"
 
 
 def remove_private_reasoning(text: str) -> str:
