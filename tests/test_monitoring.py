@@ -22,3 +22,8 @@ def test_adversarial_service_list_is_bounded():
 
 def test_new_catalog_service_requires_no_source_change():
     assert select_services("inventory service response time", CATALOG) == ["InventorySvc"]
+
+
+def test_plural_and_versioned_service_matching():
+    assert select_services("Check payment gateways uptime", CATALOG) == ["PaymentGW"]
+    assert select_services("How is AnalyticsSvc_v2 behaving?", CATALOG) == ["AnalyticsSvc_v2"]
