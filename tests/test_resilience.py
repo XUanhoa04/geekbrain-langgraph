@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -329,3 +330,44 @@ def test_local_credential_policy_allows_security_guidance(prompt: str):
     guardrails = Guardrails.__new__(Guardrails)
     guardrails.settings = Settings(bedrock_guardrail_id="")
     assert not guardrails.check_input(prompt).blocked
+
+
+def test_operations_logging_and_feedback(tmp_path: Path):
+    from geekbrain_rag.operations import (
+        get_audit_summary,
+        log_feedback,
+        log_query,
+    )
+
+    db_path = tmp_path / "rag_ops.db"
+
+    # Test log_query with set/iterable types
+    log_query(
+        db_path,
+        {
+            "session_id": "session-1",
+            "query_hash": "hash123",
+            "intents": {"DOCUMENT", "LIVE_METRICS"},
+            "tools_used": {"Monitoring API"},
+            "citation_count": 2,
+            "abstained": 0,
+            "latency_ms": 150,
+            "error": None,
+        },
+    )
+
+    summaries = get_audit_summary(db_path, limit=5)
+    assert len(summaries) == 1
+    assert summaries[0]["session_id"] == "session-1"
+    assert summaries[0]["citation_count"] == 2
+
+    # Test log_feedback
+    log_feedback(
+        db_path,
+        {
+            "session_id": "session-1",
+            "query_hash": "hash123",
+            "rating": 5,
+            "comment": "Great answer!",
+        },
+    )

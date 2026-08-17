@@ -48,6 +48,14 @@ def initialize_operations_db(path: Path) -> None:
         )
 
 
+def _to_json_list(value: Any) -> str:
+    if isinstance(value, (list, tuple, set)):
+        return json.dumps(list(value))
+    if isinstance(value, str):
+        return value
+    return json.dumps([])
+
+
 def log_query(path: Path, payload: dict[str, Any]) -> None:
     initialize_operations_db(path)
     columns = (
@@ -63,8 +71,8 @@ def log_query(path: Path, payload: dict[str, Any]) -> None:
     )
     values = [payload.get(column) for column in columns]
     values[0] = values[0] or datetime.now(UTC).isoformat()
-    values[3] = json.dumps(values[3] or [])
-    values[4] = json.dumps(values[4] or [])
+    values[3] = _to_json_list(values[3])
+    values[4] = _to_json_list(values[4])
     with sqlite3.connect(path, timeout=2) as conn:
         conn.execute(
             f"INSERT INTO query_audit ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
@@ -93,3 +101,34 @@ def log_ingestion(path: Path, payload: dict[str, Any]) -> None:
             f"INSERT INTO ingestion_runs ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
             values,
         )
+
+
+def log_feedback(path: Path, payload: dict[str, Any]) -> None:
+    initialize_operations_db(path)
+    columns = (
+        "created_at",
+        "session_id",
+        "query_hash",
+        "rating",
+        "comment",
+    )
+    values = [payload.get(column) for column in columns]
+    values[0] = values[0] or datetime.now(UTC).isoformat()
+    with sqlite3.connect(path, timeout=2) as conn:
+        conn.execute(
+            f"INSERT INTO feedback ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+            values,
+        )
+
+
+def get_audit_summary(path: Path, limit: int = 10) -> list[dict[str, Any]]:
+    initialize_operations_db(path)
+    with sqlite3.connect(path, timeout=2) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            "SELECT created_at, session_id, query_hash, intents, tools_used, "
+            "citation_count, abstained, latency_ms, error "
+            "FROM query_audit ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
