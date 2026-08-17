@@ -5,8 +5,7 @@ Run: uvicorn monitoring_api:app --reload --port 8000
 """
 
 import random
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -235,7 +234,7 @@ def _jitter(value: float, pct: float = 0.05) -> float:
 
 
 def _jitter_int(value: int, pct: float = 0.05) -> int:
-    return int(round(value * (1.0 + random.uniform(-pct, pct))))
+    return round(value * (1.0 + random.uniform(-pct, pct)))
 
 
 @app.get("/", summary="API index")
@@ -272,7 +271,7 @@ def get_metrics(service_name: str):
     base = BASE_METRICS[service_name]
     return {
         "service": service_name,
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "latency_ms": {
             "p50": _jitter_int(base["latency_ms"]["p50"]),
             "p95": _jitter_int(base["latency_ms"]["p95"]),

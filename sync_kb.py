@@ -5,11 +5,12 @@ Usage:
     python sync_kb.py                  # Sync all docs from knowledge_base folder
     python sync_kb.py --file FILE_PATH # Sync a single file only
 """
-import boto3
-import time
-import os
 import argparse
+import os
+import time
 from pathlib import Path
+
+import boto3
 
 # ================== CONFIG ==================
 KB_ID = "WZXVNGT9JA"
@@ -54,7 +55,7 @@ def start_sync(kb_id: str, data_source_id: str, region: str):
     """Trigger Bedrock KB re-ingestion và theo dõi trạng thái"""
     client = boto3.client('bedrock-agent', region_name=region)
 
-    print(f"\n Starting Bedrock Knowledge Base sync...")
+    print("\n Starting Bedrock Knowledge Base sync...")
 
     response = client.start_ingestion_job(
         knowledgeBaseId=kb_id,
@@ -79,8 +80,8 @@ def start_sync(kb_id: str, data_source_id: str, region: str):
         if status in ['COMPLETE', 'FAILED']:
             if status == 'COMPLETE':
                 stats = job_info.get('statistics', {})
-                print(f"\n Sync hoàn tất!")
-                print(f"   BÁO CÁO:")
+                print("\n Sync hoàn tất!")
+                print("   BÁO CÁO:")
                 print(f"   - Tổng file đã quét:   {stats.get('numberOfDocumentsScanned', 0)}")
                 print(f"   - File thêm mới:        {stats.get('numberOfNewDocumentsIndexed', 0)}")
                 print(f"   - File đã cập nhật:     {stats.get('numberOfModifiedDocumentsIndexed', 0)}")
@@ -88,7 +89,7 @@ def start_sync(kb_id: str, data_source_id: str, region: str):
                 if stats.get('numberOfDocumentsFailed', 0) > 0:
                     print(f"   - ⚠️ File bị lỗi:      {stats.get('numberOfDocumentsFailed', 0)}")
             else:
-                print(f"Sync thất bại!")
+                print("Sync thất bại!")
                 if 'failureReasons' in job_info:
                     print(f"   Lý do: {job_info['failureReasons']}")
             break
@@ -120,7 +121,7 @@ def main():
                     print(f" File not found: {args.file}")
                     return
                 files = [args.file]
-                print(f"\n📁 Uploading single file...")
+                print("\n📁 Uploading single file...")
             else:
                 # Upload all .md files from knowledge_base folder
                 files = sorted(Path(LOCAL_KB_DIR).glob("*.md"))
@@ -137,8 +138,10 @@ def main():
         # Bước 2: Trigger re-ingestion
         start_sync(KB_ID, DATA_SOURCE_ID, REGION)
 
-    except Exception as e:
+    except (boto3.exceptions.Boto3Error, OSError, ValueError) as e:
         print(f"\n Error: {e}")
+    except Exception as e:  # noqa: BLE001
+        print(f"\n Unexpected error: {e}")
 
 if __name__ == "__main__":
     main()
